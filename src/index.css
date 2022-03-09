@@ -1,0 +1,125 @@
+body {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+		Arial, sans-serif;
+	margin: auto;
+	padding: 0.5rem;
+	background-color: rgb(40, 43, 54);
+	min-height: 40rem;
+	min-width: 50rem;
+}
+/* 自适应高度 */
+html {
+	height: 95%;
+}
+body,
+.container {
+	height: 100%;
+}
+/* 主要颜色 */
+body,
+.left,
+.top,
+.bottom {
+	color: aliceblue;
+}
+/* .left, */
+.top,
+.bottom {
+	background-color: rgb(51, 54, 65);
+}
+
+.container {
+	display: flex;
+}
+.left {
+	flex: 1;
+	padding: 0.5rem;
+	height: 100%;
+	border-radius: 0 0 0 0.5rem;
+	outline: none;
+	background-color: rgb(15, 19, 32);
+	resize: none;
+}
+.right {
+	width: 35rem;
+	padding-left: 0.5rem;
+}
+.top {
+	border: 1px solid black;
+	height: 80%;
+}
+.bottom {
+	margin-top: 0.5rem;
+	border: 1px solid black;
+	height: 21%;
+	border-radius: 0 0 0.5rem 0;
+}
+.bottom-head {
+	padding-left: 0.4rem;
+	height: 1.5rem;
+	line-height: 1.5rem;
+	color: darkgray;
+	background-color: rgb(15, 19, 32);
+}
+.top-head {
+	padding-left: 0.4rem;
+	height: 1.5rem;
+	line-height: 1.5rem;
+	color: darkgray;
+	background-color: rgb(15, 19, 32);
+}
+.top-content,
+.bottom-content {
+	height: calc(100% - 1.5rem);
+}
+/* 多一个div主要是为了解决滚动与padding之间的问题 */
+.top-content-text,
+.bottom-content-text {
+	padding: 0.5rem;
+	font-size: 0.8rem;
+	color: darkgrey;
+	height: calc(100% - 1rem);
+	overflow-y: auto;
+}
+/* 选中类 */
+::selection {
+	background: #aa9100;
+	color: #2e353f;
+}
+
+::-moz-selection {
+	background: #aa9100;
+	color: #2e353f;
+}
+
+::-webkit-selection {
+	background: #aa9100;
+	color: #2e353f;
+}
+/* 滚动条 */
+.left::-webkit-scrollbar,
+.top-content-text::-webkit-scrollbar,
+.bottom-content-text::-webkit-scrollbar {
+	width: 10px;
+	height: 10px;
+	/**/
+}
+.left::-webkit-scrollbar-track,
+.top-content-text::-webkit-scrollbar-track,
+.bottom-content-text::-webkit-scrollbar-track {
+	background: rgb(239, 239, 239);
+	border-radius: 2px;
+}
+.left::-webkit-scrollbar-thumb,
+.top-content-text::-webkit-scrollbar-thumb,
+.bottom-content-text::-webkit-scrollbar-thumb {
+	background: #bfbfbf;
+	border-radius: 10px;
+	cursor: pointer;
+}
+.left::-webkit-scrollbar-thumb:hover,
+.top-content-text::-webkit-scrollbar-thumb:hover,
+.bottom-content-text::-webkit-scrollbar-thumb:hover {
+	background: rgb(45, 45, 51);
+}
+
