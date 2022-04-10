@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Lexer</title>
+    <link rel="icon" type="image/x-ico"
+          href="./vendor/img/logo.png"/>
+    <link type="text/css" href="./vendor/css/codemirror.5.51.0.min.css" rel="stylesheet"/>
+    <link type="text/css" href="./vendor/css/monokai.5.51.0.min.css" rel="stylesheet"/>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+        }
+
+        #Header {
+            text-align: center;
+            font-size: 30px;
+            font-weight: 100;
+            padding: 10px 0;
+            border-bottom: 1px solid #ddd;
+            background: #FAFAFA;
+        }
+
+        #LangInfo {
+            font-size: 14px;
+            padding: 5px 0;
+            margin-bottom: 10px;
+            color: #777;
+            letter-spacing: 0px;
+        }
+
+        #LangInfo a {
+            color: #6495ed;
+            padding-left: 3px;
+        }
+
+        #Dashboard {
+            width: 900px;
+            margin: 10px auto;
+        }
+
+        #Preferences {
+            text-align: center;
+            width: 120px;
+            overflow-y: hidden;
+            height: 205px;
+        }
+
+        .lang-choose {
+            display: inline-block;
+            width: 100px;
+            border-top: 1px solid #bbb;
+            border-left: 1px solid #bbb;
+            border-right: 1px solid #bbb;
+            padding: 5px 2px;
+            background: #fafafa;
+        }
+
+        .lang-choose a {
+            display: inline-block;
+            width: 100%;
+            text-decoration: none;
+            color: #888;
+        }
+
+        .lang-choose.lang-choose-first {
+            border-top-left-radius: 3px;
+            border-top-right-radius: 3px;
+        }
+
+        .lang-choose.lang-choose-last {
+            border-bottom-left-radius: 3px;
+            border-bottom-right-radius: 3px;
+            border-bottom: 1px solid #bbb;
+        }
+
+        .lang-choose:hover, .lang-choose-select {
+            cursor: pointer;
+            background: #ddd;
+        }
+
+        #Input {
+            float: left;
+        }
+
+        #Input .CodeMirror {
+            width: 722px;
+            height: 222px;
+            border: 1px solid #ddd;
+        }
+
+        #Textarea {
+            display: block;
+            margin: 0 auto;
+            border: 1px solid #ddd;
+            /*border-radius: 5px;*/
+            padding: 10px;
+            width: 700px;
+            height: 200px;
+            resize: none;
+            background: #FAFAFA;
+        }
+
+        #ButtonCodearea{
+            cursor: pointer;
+        }
+        
+        #Show {
+            width: 100%;
+            min-height: 50px;
+            margin: 30px auto;
+            margin-top: 65px;
+        }
+
+        #TokenList {
+            width: 900px;
+            min-height: 50px;
+            margin: 0 auto;
+        }
+
+        .token {
+            display: inline-block;
+            min-width: 30px;
+            text-align: center;
+            font-size: 15px;
+            color: #FFF;
+            border-radius: 100px;
+            margin: 5px;
+            height: 25px;
+            line-height: 25px;
+            padding: 2px 8px;
+        }
+
+        .token.token-Operator {
+            background: #6495ed;
+        }
+
+        .token.token-DoubleOperator {
+            background: #0047c5;
+        }
+
+        .token.token-Symbol {
+            background: #1f355d;
+        }
+
+        .token.token-Whitespace {
+            background: #6495ed;
+        }
+
+        .token.token-LineFeed {
+            background: #d367d3;
+        }
+
+        .token.token-Keyword {
+            background: #d6440c;
+        }
+
+        .token.token-Identifier {
+            /*background: #a9a9a9;*/
+            background: #8e8989;
+        }
+
+        .token.token-Number {
+            background: #08964e;
+        }
+
+        .token.token-Float {
+            background: #03522a;
+        }
+
+        .token.token-String {
+            background: #d68e0a;
+        }
+
+        .token.token-Char {
+            background: #f7be56;
+        }
+
+        .token.token-Unknown {
+            background: #2f2c2c;
+            color: #ef1c1c;
+        }
+
+        .token.token-al {
+            background: #d68e0a;
+        }
+
+        .token.token-G {
+            background: #d6440c;
+        }
+
+        .token.token-o {
+            background: #0047c5;
+        }
+
+        .AllTokenList {
+            display: none;
+        }
+
+        .opacity {
+            opacity: 0.2;
+        }
+
+        .header-a-link {
+            text-decoration: none;
+            color: #000;
+        }
+
+        .header-a-link:hover {
+            cursor: pointer;
+        }
+
+        #busuanzi_value_site_uv, #busuanzi_value_site_pv {
+            padding: 0 2px;
+        }
+
+        #busuanzi_value_site_pv_change, #busuanzi_value_site_uv_change {
+            color: #08964e;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        #busuanzi_value_site_uv_change {
+
+        }
+
+        #Footer {
+            background: #FFF;
+            margin-top: 30px;
+        }
+
+        #Footer p {
+            padding: 0;
+            margin: 0;
+        }
+    </style>
+</head>
+<body>
+<div>
+    <div id="Header">
+        <a href="https://github.com/WGrape/lexer" class="header-a-link">Lexer</a>
+        <iframe style="margin-left: 2px; margin-bottom:-5px;" frameborder="0" scrolling="0" width="100px" height="20px"
+                src="https://ghbtns.com/github-btn.html?user=WGrape&repo=lexer&type=star&count=true"></iframe>
+        <span id="busuanzi_container_site_pv"
+              style="font-size: 15px;color: #666;float: right;margin-top: 10px;margin-right: 10px;">&nbsp;PV<span
+                id="busuanzi_value_site_pv"></span><span id="busuanzi_value_site_pv_change"></span></span>
+        <span id="busuanzi_container_site_uv"
+              style="font-size: 15px;color: #666;float: right;margin-top: 10px;">UV<span
+                id="busuanzi_value_site_uv"></span><span id="busuanzi_value_site_uv_change"></span>&nbsp;/</span>
+    </div>
+
+    <div id="Dashboard">
+        <div id="LangInfo"></div>
+        <div id="Input">
+            <div style="width:721px;height: 30px;line-height:30px;text-indent:5px;background: #ddd;border: 1px solid #ccc;font-size:13px;color:#555;">
+                <span>Simple Code Editor</span>
+                <button id="ButtonCodearea">Syntax / ON</button>
+            </div>
+            <label>
+                <textarea id="Textarea" autofocus="autofocus"></textarea>
+            </label>
+        </div>
+        <ul id="Preferences">
+            <li class="lang-choose lang-choose-first lang-choose-c"><a href="?lang=c">C</a></li>
+            <li class="lang-choose lang-choose-sql"><a href="?lang=sql">SQL</a></li>
+            <li class="lang-choose lang-choose-last lang-choose-goal"><a href="?lang=goal">Goal</a></li>
+        </ul>
+    </div>
+
+    <!--Dynamically display the parsed token list-->
+    <div id="Show">
+        <div id="TokenList">
+        </div>
+    </div>
+
+    <!--Dynamically display the Token types supported in different languages-->
+    <div style="margin-top: 35px;border-top: 1px solid #ddd;border-bottom: 1px solid #ddd;">
+        <div style="text-align: center;background: #eee;padding: 20px 0;">
+            <h3 style="margin: 0;padding: 0 0 5px 0;font-weight: 100;">All token types</h3>
+            <div class="AllTokenList AllTokenListDefault">
+                <span class="token token-Operator" tokentype="Operator" tokenvalue="Operator">Operator</span>
+                <span class="token token-DoubleOperator" tokentype="DoubleOperator" tokenvalue="DoubleOperator">DoubleOperator</span>
+                <span class="token token-Symbol" tokentype="Symbol" tokenvalue="Symbol">Symbol</span>
+                <span class="token token-Whitespace" tokentype="Whitespace" tokenvalue="Whitespace">Whitespace</span>
+                <span class="token token-LineFeed" tokentype="LineFeed" tokenvalue="LineFeed">LineFeed</span>
+                <span class="token token-Keyword" tokentype="Keyword" tokenvalue="Keyword">Keyword</span>
+                <span class="token token-Identifier" tokentype="Identifier" tokenvalue="Identifier">Identifier</span>
+                <span class="token token-Number" tokentype="Number" tokenvalue="Number">Number</span>
+                <span class="token token-Float" tokentype="Float" tokenvalue="Float">Float</span>
+                <span class="token token-String" tokentype="String" tokenvalue="String">String</span>
+                <span class="token token-Char" tokentype="Char" tokenvalue="Char">Char</span>
+                <span class="token token-Unknown" tokentype="Unknown" tokenvalue="Unknown">Unknown</span>
+            </div>
+            <div class="AllTokenList AllTokenListGoal">
+                <span class="token token-G" tokentype="G" tokenvalue="G">G</span>
+                <span class="token token-o" tokentype="o" tokenvalue="o">o</span>
+                <span class="token token-al" tokentype="al" tokenvalue="al">al</span>
+                <span class="token token-Unknown" tokentype="Unknown" tokenvalue="Unknown">Unknown</span>
+            </div>
+        </div>
+    </div>
+
+    <div id="Footer">
+        <p style="text-align: center;">
+            <img src="./vendor/img/logo.png"
+                 width="30px;">
+        </p>
+        <p style="text-align: center;font-size:13px;padding:3px 0;"><span style="color:#777;">合作请联系 <a
+                href="https://github.com/WGrape">Wgrape</a></span></p>
+        <p style="text-align: center;font-size:13px;padding:3px 0;"><span style="color:#777;">© 2021 Lexer, Inc.</span>
+        </p>
+    </div>
+</div>
+<script src="./vendor/js/jquery.2.2.0.min.js"></script>
+<script src="./vendor/js/codemirror.5.51.0.min.js"></script>
+<script src="./vendor/js/clike.5.51.0.min.js"></script>
+<script src="./vendor/js/sql.5.51.0.min.js"></script>
+<script src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script>
+<script>
+
+    // Parsing params in url
+    function getParam(param) {
+        let slices = window.location.href.split('?');
+        if (slices[1]) {
+            let searchString = slices[1];
+            let params = searchString.split('&');
+            for (let i = 0; i <= params.length - 1; i++) {
+                let v = params[i];
+                let arr = v.split('=');
+                if (arr[0] && arr[0] === param) {
+                    return arr[1];
+                }
+            }
+        }
+        return false;
+    }
+
+    // Start parse your input
+    function startParseInput() {
+        let stream = codearea === 'editor' ? editor.getValue() : $('#Textarea').val();
+        lexer.start(stream);
+        console.log(lexer);
+        $('#TokenList').html('');
+        lexer.DFA.result.tokens.forEach((token) => {
+            let type = token.type;
+            let value = token.value;
+            let classToken = 'token-' + type;
+            if (value === '\n') {
+                value = '\\n'; // prevent parse this char
+            }
+
+            // if token's value is tab, prevent parse this char
+            if (value.replace(/\t+/g, ' ') === ' ') {
+                value = '\\t';
+            }
+
+            $('#TokenList').append('<span class="token ' + classToken + '" tokentype="' + type + '" tokenvalue="' + value + '">' + value + '</span>');
+        });
+    }
+
+    // According to the currently selected language, dynamically load different JS extension files and CSS files, and dynamically process the display logic
+    let lang = getParam('lang');
+    let mode = "text/plain";
+    if (lang === 'c') {
+        mode = "text/x-csrc";
+        $('.lang-choose-c').addClass('lang-choose-select');
+        document.write('<script src="./package/c-lexer.min.js"><\/script>');
+        document.write('<script src="./test/auto/c-lexer_test.js"><\/script>');
+        $('.AllTokenListDefault').fadeIn();
+        $('#LangInfo').html("C is a general programming language that is extremely popular, simple and flexible ... please check <a target='_blank' href='https://en.wikipedia.org/wiki/C_(programming_language)'>detail</a>");
+    } else if (lang === 'sql') {
+        mode = "text/x-sql";
+        $('.lang-choose-sql').addClass('lang-choose-select');
+        document.write('<script src="./package/sql-lexer.min.js"><\/script>');
+        document.write('<script src="./test/auto/sql-lexer_test.js"><\/script>');
+        $('.AllTokenListDefault').fadeIn();
+        $('#LangInfo').html("SQL is a general programming language used to manage relational database ... please check <a target='_blank' href='https://en.wikipedia.org/wiki/SQL'>detail</a>");
+    } else if (lang === 'goal') {
+        $('.lang-choose-goal').addClass('lang-choose-select');
+        document.write('<script src="./package/goal-lexer.min.js"><\/script>');
+        document.write('<script src="./test/auto/goal-lexer_test.js"><\/script>');
+        $('.AllTokenListGoal').fadeIn();
+        $('#LangInfo').html("Goal language is a problem from leetcode ... please check <a target='_blank' href='https://leetcode.com/problems/goal-parser-interpretation/'>detail</a>");
+    } else {
+        window.location.href = window.location.pathname + '?lang=c';
+    }
+
+    // editor type
+    let CODEAREA_TYPE_TEXTAREA = 'textarea';
+    let CODEAREA_TYPE_EDITOR = 'editor';
+    let codearea = getParam('codearea');
+    if (codearea !== CODEAREA_TYPE_TEXTAREA && codearea !== CODEAREA_TYPE_EDITOR) {
+        codearea = CODEAREA_TYPE_TEXTAREA;
+    }
+    if (codearea === CODEAREA_TYPE_TEXTAREA) {
+        $('#ButtonCodearea').text('Syntax / ON');
+    } else {
+        $('#ButtonCodearea').text('Syntax / OFF');
+    }
+
+    // Put in the event loop queue
+    setTimeout(function () {
+
+        // Register events for different elements of the page
+        $('#Textarea').on('input', function () {
+            $('#TokenList').html('<p style="color: #888;">Lexer is working... ...</p>');
+            startParseInput();
+        });
+        $('#Textarea').blur(function () {
+            startParseInput();
+        });
+        $(document).on('mouseenter', '.token', function () {
+            let type = $(this).attr('tokentype');
+            $(".token").addClass('opacity');
+            $(".token-" + type).removeClass('opacity');
+        });
+        $(document).on('mouseleave', '.token', function () {
+            $(".token").removeClass('opacity');
+        });
+        $('#ButtonCodearea').on('click', function () {
+            if (codearea === CODEAREA_TYPE_TEXTAREA) {
+                window.location.href = window.location.pathname + '?lang=' + lang + '&codearea=' + CODEAREA_TYPE_EDITOR;
+            } else {
+                window.location.href = window.location.pathname + '?lang=' + lang + '&codearea=' + CODEAREA_TYPE_TEXTAREA;
+            }
+        });
+
+        // Generate default codes in different languages
+        let defaultInput = "";
+        if (lang === 'c') {
+            defaultInput = "int a = 10;\n" +
+                "int b = 20;\n" +
+                "int c = 20;\n" +
+                "\n" +
+                "float f = 928.2332;\n" +
+                "char b = 'b';\n" +
+                "\n" +
+                "if(a == b){\n" +
+                "    printf(\"Hello, World! \\\"\");\n" +
+                "}else if(b!=c){\n" +
+                "    printf(\"Hello, World! \\n Hello, World!\");\n" +
+                "}else{\n" +
+                "    printf(\"Hello\\n\");\n" +
+                "}";
+        } else if (lang === 'goal') {
+            defaultInput = "(al)G(al)()()G()()()G()(al)"
+        } else {
+            defaultInput = "select * from test where id >= 10 and id <10 and name='test';"
+        }
+
+        if (codearea === 'editor') {
+            window.editor = CodeMirror.fromTextArea(document.getElementById('Textarea'), {
+                mode: mode,
+                theme: "monokai",
+                indentUnit: 4,
+                lineWrapping: true,
+                indentWithTabs: true,
+                smartIndent: true,
+                lineNumbers: true,
+                matchBrackets: true,
+                autofocus: true,
+            });
+            editor.setValue(defaultInput);
+            editor.on('change', function () {
+                startParseInput();
+            });
+            editor.on('blur', function () {
+                startParseInput();
+            });
+        }
+
+        $('#Textarea').val('Sample code is being displayed, please wait...');
+        setTimeout(function () {
+
+            // Automatically enter default codes in different languages, saving the time to manually enter codes
+            $('#Textarea').val(defaultInput);
+            startParseInput();
+
+            // run automated testing
+            let caseList = returnCaseList();
+            console.log("Automated testing has " + caseList.length + ' cases, now is running ...');
+            for (let i = 0; i <= caseList.length - 1; ++i) {
+                let outputs = caseList[i].output;
+                lexer.start(caseList[i].input);
+
+                let failed = false;
+                let tokens = lexer.DFA.result.tokens;
+                if (!isNaN(outputs)) {
+                    failed = outputs !== tokens.length;
+                } else {
+                    for (let j = 0; j <= tokens.length - 1; ++j) {
+                        if (typeof outputs[j] === 'undefined' || outputs[j].type !== tokens[j].type || outputs[j].value !== tokens[j].value) {
+                            failed = true;
+                        }
+                    }
+                }
+
+                if (failed) {
+                    alert('Automated testing is failed');
+                    console.error('Case ' + (i + 1) + ': failed | ' + 'input = ' + caseList[i].input);
+                } else {
+                    console.info("\x1B[32m" + 'Case ' + (i + 1) + ': success | ' + 'input = ' + caseList[i].input + "\x1B[0m");
+                }
+            }
+            console.log('Automated testing is Done');
+        }, 100);
+
+        // count the changed number compared to the last visit
+        setTimeout(function () {
+
+            let lastPv = parseInt(localStorage.getItem('pv'));
+            let lastUv = parseInt(localStorage.getItem('uv'));
+            if (isNaN(lastPv) || isNaN(lastUv) || lastPv <= 0 || lastUv <= 0) {
+                lastPv = 0;
+                lastUv = 0;
+            }
+
+            let pv = parseInt($("#busuanzi_value_site_pv").text());
+            let uv = parseInt($("#busuanzi_value_site_uv").text());
+            if (isNaN(pv) || isNaN(uv) || pv <= 0 || uv <= 0) {
+                return;
+            }
+            localStorage.setItem('pv', pv);
+            localStorage.setItem('uv', uv);
+
+            let pvChange = pv - lastPv;
+            let uvChange = uv - lastUv;
+            if (pvChange) {
+                $("#busuanzi_value_site_pv_change").text("↑" + pvChange);
+            }
+            if (uvChange) {
+                $("#busuanzi_value_site_uv_change").text("↑" + uvChange);
+            }
+        }, 4000);
+    }, 100);
+
+</script>
+</body>
+</html>

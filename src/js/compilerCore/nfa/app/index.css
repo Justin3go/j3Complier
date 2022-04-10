@@ -1,0 +1,92 @@
+* {
+	margin: 0;
+	padding: 0;
+}
+body {
+	font: 14px/1.7 sans-serif;
+	min-width: 1200px;
+	/* background-color: rgb(225, 225, 225); */
+}
+header {
+	padding: 10px 20px;
+  box-shadow: 0px 10px 20px rgb(81, 56, 56);
+	background: #333;
+}
+.cmd {
+	display: flex;
+	align-items: center;
+	margin: 0 auto;
+	max-width: 800px;
+}
+.cmd + .cmd {
+	border-top: 1px solid #333;
+}
+.cmd__input {
+	flex: 1;
+	padding: 10px;
+	border: none;
+	outline: none;
+	font-size: 18px;
+}
+.cmd__input:focus {
+	box-shadow: inset 0 0 10px #333;
+}
+.cmd__input:disabled {
+	background: #eee;
+	cursor: not-allowed;
+}
+.cmd__btn {
+	padding: 10px;
+	font-size: 18px;
+	border: none;
+	border-left: 1px solid #333;
+	background: #fff;
+	outline: none;
+	user-select: none;
+	cursor: pointer;
+}
+.cmd__btn:hover {
+	background: #f0f0f0;
+}
+.cmd__btn:active {
+	background: #ddd;
+}
+.cmd__btn-checkbox.s-checked {
+	color: #fff;
+	background: #666;
+}
+.cmd__btn:disabled {
+	color: #999;
+	background: #eee;
+	cursor: not-allowed;
+}
+.cmd__btn-checkbox.s-checked:disabled {
+	color: #ccc;
+	background: #666;
+}
+.container-canvas {
+	display: flex;
+  align-items: center;
+	margin: 40px;
+}
+.canvas {
+	background-color: #fff;
+	margin: 40px;
+	width: 700px;
+	height: 500px;
+	border-radius: 20px;
+  box-shadow: inset 0 0 20px #333;
+}
+.canvas + .canvas {
+	border-top: 1px solid #e5e5e5;
+}
+
+.inspector__result {
+	margin: 0 auto;
+	max-width: 800px;
+	font-size: 20px;
+	color: #999;
+}
+.inspector__result b {
+	color: #333;
+}
