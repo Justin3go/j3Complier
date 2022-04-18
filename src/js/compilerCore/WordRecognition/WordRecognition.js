@@ -15,20 +15,21 @@ class WordRecognition {
     this.pattenBoundary = /[{};,\s]/i;
     // 定义一些符号
     this.operation1 = ['+', '-', '*', '/', '=', '>', '<', '[', ']', '(', ')', '!', '%'];
-    this.operation2 = ['+=', '++', '>=', '<=', '==', '!=', '&&', '||'];
+    this.operation2 = ['+=', '-=', '*=', '/=', '%=', '++', '--', '>=', '<=', '==', '!=', '&&', '||'];
     this.operation3 = ['>==', '<=='];
     // 定义对应种别码
     this.codeMap = {
       'char': 101, 'int': 102, 'float': 103, 'break': 104,
-      'const': 105, 'return': 106, 'void': 107, 'oontinue': 108,
+      'const': 105, 'return': 106, 'void': 107, 'continue': 108,
       'do': 109, 'while': 110, 'if': 111, 'else': 112, 'for': 113,
-      'true': 114, 'false': 115,
+      'true': 114, 'false': 115, 'double': 116, 'extern': 117, 'unsigned': 118,
+      'register': 119, 'long': 120, 'static': 121,
       '{': 301, '}': 302, ';': 303, ',': 304,
-      '整数': 400, '字符': 500, '字符串': 600, '标识符': 700, '实数': 800,
+      'typeint': 400, 'typechar': 500, 'typestr': 600, 'typeid': 700, 'typenum': 800,
       '(': 201, ')': 202, '[': 203, ']': 204, '!': 205, '*': 206,
       '/': 207, '%': 208, '+': 209, '-': 210, '<': 211, '<=': 212,
       '>': 213, '>=': 214, '==': 215, '!=': 216, '&&': 217, '||': 218,
-      '=': 219
+      '=': 219, '+=':220,'-=':221,'*=':222,'/=':223,'%=':224,'++':225,'--':226
     };
     this.errorPos = [];
     // 定义(){}[]以及消耗的位置
@@ -300,60 +301,60 @@ class WordRecognition {
       // 代表不需要处理
       return;
     }
-    if(key=== '}' || key === ']' || key === ')'){
+    if (key === '}' || key === ']' || key === ')') {
       // 不可能先出现右半部
       this.errorPos.push([prevI, prevPos, `未匹配：符号${key}前面没有匹配的另一半符号`]);
       return;
     }
     // 处理当前行
     for (pos = pos + 1; pos < len; pos++) {
-      if(line[pos] === '/'){
+      if (line[pos] === '/') {
         let [tmp1, tmp2] = this.clearNotes(i, pos);
         if (tmp1 !== -1 || tmp2 !== -1) { // 说明是注释,跳过注释
-          if(tmp1 !== i){
+          if (tmp1 !== i) {
             i = tmp1 - 1
             break;
           }
           pos = tmp2;
-          if(pos >= len)break;
+          if (pos >= len) break;
         }
       }
-      if (line[pos] === key)count++;
-      else if(line[pos] === mkey)count--;
-      if(count === 0){
+      if (line[pos] === key) count++;
+      else if (line[pos] === mkey) count--;
+      if (count === 0) {
         // 记录当前位置
-        this.matchedPos[key] = [i, pos+1];
+        this.matchedPos[key] = [i, pos + 1];
         return // 匹配完成
       }
     }
     // 如果count没有减为0，匹配后续行
-    if(count !== 0){
-      for(i = i+1; i < this.data.length; i++){
+    if (count !== 0) {
+      for (i = i + 1; i < this.data.length; i++) {
         line = this.data[i];
         len = line.length;
-        for(pos = 0; pos < len; pos++){
-          if(line[pos] === '/'){
+        for (pos = 0; pos < len; pos++) {
+          if (line[pos] === '/') {
             let [tmp1, tmp2] = this.clearNotes(i, pos);
             if (tmp1 !== -1 || tmp2 !== -1) { // 说明是注释,跳过注释
-              if(tmp1 !== i){
+              if (tmp1 !== i) {
                 i = tmp1;
                 break;
               }
               // TODO 这里跳过应该和start函数那样跳过注释，这里直接跳过整行了，不想改了
               pos = tmp2;
-              if(pos >= len)break;
+              if (pos >= len) break;
             }
           }
-          if(line[pos] === key)count++;
-          else if(line[pos]=== mkey)count--;
-          if(count === 0){
+          if (line[pos] === key) count++;
+          else if (line[pos] === mkey) count--;
+          if (count === 0) {
             this.matchedPos[key] = [i, pos];
             return //匹配完成；
           }
         }
       }
     }
-    if(count !== 0){
+    if (count !== 0) {
       // 收集错误信息
       this.errorPos.push([prevI, prevPos, '未匹配：从该符号起的对应符号数量不匹配'])
       return;
@@ -370,7 +371,7 @@ class WordRecognition {
     } else if (this.operation2.indexOf(op2) !== -1) {
       return pos + 2;
     } else if (this.operation1.indexOf(op1) !== -1) {
-      if(['[',']','(',')'].indexOf(op1) !== -1){
+      if (['[', ']', '(', ')'].indexOf(op1) !== -1) {
         this.isMatch(i, pos);
       }
       return pos + 1;
@@ -411,13 +412,13 @@ class WordRecognition {
   transCode(str, type, state) {
     if (type) {
       // ... 还要判断是什么数字
-      if (type === 'number') {
+      if (type === 'typenum') {
         if (state === 15 || state === 1) return 400;
         else return 800;
         // TODO 不够详细
       }
-      else if (type === 'string' && str.length > 3) return 600;
-      else if (type === 'string' && str.length === 3) return 500; 
+      else if (type === 'typestr' && str.length > 3) return 600;
+      else if (type === 'typestr' && str.length === 3) return 500;
     }
     // 未传type
     return this.codeMap[str] || 700; // 未找到的话就是标识符
@@ -429,7 +430,15 @@ class WordRecognition {
     return match + 1  // 0 代表未找到
   }
   isSpaceLine(line) {
-    return line.replace(/[\s(\r\n)(\n\r)\r\n]/g, '').length  === 0;
+    return line.replace(/[\s(\r\n)(\n\r)\r\n]/g, '').length === 0;
+  }
+  transTokens(tokens) {
+    let res = {};
+    for (let [k, v] of Object.entries(tokens)) {
+      let r = v.map((e) => e[0]);
+      res[k] = r;
+    }
+    return res;
   }
   // 整合其他函数并循环调用
   async start() {
@@ -441,20 +450,20 @@ class WordRecognition {
     let flag = 0; // 如果不等于0，则j要从flag开始，而不是从0
     label: for (let i = 0; i < len; i++) {
       let line = this.data[i];
-      if(this.isSpaceLine(line))continue;  // 是空行就跳过
+      if (this.isSpaceLine(line)) continue;  // 是空行就跳过
       res[i] = [];  // key为行号， val为token数组
       for (let j = 0; j < line.length;) {
         if (flag !== 0) {
           j = flag;
           flag = 0;  // 只用一次
-          if(j >= line.length)break;
+          if (j >= line.length) break;
         }
         let c = line[j];
         // 先判断是不是界符
         if (this.pattenBoundary.test(c)) {
           // 执行一些操作
           // TODO 处理{}可能不匹配的错误情况
-          if(c === '{' || c === '}'){
+          if (c === '{' || c === '}') {
             info.push(`识别出界符：${c}`);
             res[i].push([this.transCode(c), c]);
             this.isMatch(i, j);
@@ -487,10 +496,10 @@ class WordRecognition {
             let str = line.slice(prev, j);
             info.push(`识别出数字：${str}，状态码为：${state}`);
             // state来区分是几进制，这里仅识别了整数
-            res[i].push([this.transCode(str, 'number', state), str]);
+            res[i].push([this.transCode(str, 'typenum', state), str]);
           } else {
             // recognizeNum里面已经做了更详细的错误处理，这里就不重复添加了
-            let isHave = this.errorPos.some((val, index, arr)=>{
+            let isHave = this.errorPos.some((val, index, arr) => {
               return val[0] === i && val[1] === j;
             })
             !isHave && this.errorPos.push([i, j, '无法识别：前后包含非法字符']);
@@ -507,7 +516,7 @@ class WordRecognition {
             info.push(`识别出标识符或保留字：${str}，状态码为：${state}`);
             res[i].push([this.transCode(str), str]);
           } else {
-            let isHave = this.errorPos.some((val, index, arr)=>{
+            let isHave = this.errorPos.some((val, index, arr) => {
               return val[0] === i && val[1] === j;
             })
             !isHave && this.errorPos.push([i, j, '无法识别：前后包含非法字符']);
@@ -520,9 +529,9 @@ class WordRecognition {
           if (j !== 0) {
             let str = line.slice(prev, j);
             info.push(`识别出字符串或字符：${str}`);
-            res[i].push([this.transCode(str, 'string'), str]);
+            res[i].push([this.transCode(str, 'typestr'), str]);
           } else {
-            let isHave = this.errorPos.some((val, index, arr)=>{
+            let isHave = this.errorPos.some((val, index, arr) => {
               return val[0] === i && val[1] === j;
             })
             !isHave && this.errorPos.push([i, prev, '未匹配：未找到另外一半对应的\'或\"']);
@@ -537,12 +546,16 @@ class WordRecognition {
     }
     info.push('识别完成...')
     // -------打印信息--------
-    console.log('日志信息：',info);
+    console.log('---------------------------词法分析相关------------------------------');
+    console.log('日志信息：', info);
     console.log('错误情况：', this.errorPos);
     console.log('最终结果：', res);
+    return [info, this.errorPos, this.transTokens(res)];
   };
 }
 
-const wr = new WordRecognition('C:/My_app/code/j3Complier/src/js/compilerCore/testCase/test.txt');
-wr.start()
+// const wr = new WordRecognition('C:/My_app/code/j3Complier/src/js/compilerCore/testCase/test.txt');
+// wr.start()
 // wr.processFile()
+
+exports.WordRecognition = WordRecognition;
