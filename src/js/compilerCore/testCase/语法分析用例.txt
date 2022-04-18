@@ -58,9 +58,9 @@ int main()
     c *= b;
     c = a||b;
     c = a&&b;
-//    c = a^b;
+//  c = a^b;
     c = !a;
-//    c = c<<1;
+//  c = c<<1;
     c = switch_fuc(int a, int b)++;
     c = ++switch_fuc(a,b);
     c = sizeof(switch_fuc(a, b);

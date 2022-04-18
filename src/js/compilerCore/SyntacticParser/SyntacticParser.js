@@ -687,38 +687,65 @@ function printTree(tree, op = 1) {
   }
 }
 
-
+/* 使用示范 */
 async function example2() {
   const wr = new WordRecognition('C:/My_app/code/j3Complier/src/js/compilerCore/testCase/语法分析用例.txt');
-  let [info, error, tokens] = await wr.start();
-  const exp = new Expression(tokens[54]);
+  let [wInfo, error, tokensArr] = await wr.start();
+  const exp = new Expression([]);
   await exp.init('C:/My_app/code/j3Complier/src/js/compilerCore/SyntacticParser/Grammar/expression.txt')
-  console.log(tokens[54]);
-  let res1 = exp.E()
-  printTree(res1)
-  console.log(tokens[56]);
-  exp.updateToken(tokens[56])
-  let res2 = exp.E()
-  printTree(res2);
-  console.log(tokens[57]);
-  exp.updateToken(tokens[57])
-  let res3 = exp.E()
-  printTree(res3);
+  console.log('*'.repeat(20)+'first集'+'*'.repeat(20));
+  console.log(exp.tool.firstSet);
+  console.log('*'.repeat(20)+'follow集'+'*'.repeat(20));
+  console.log(exp.tool.followSet);
+  let sInfo = {};
+  for(let [line,tokens] of Object.entries(tokensArr)){
+    exp.updateToken(tokens)
+    let res = exp.E();
+    exp.info.length && (sInfo[line] = exp.info); // 收集日志信息
+    if(res){
+      console.log('*'.repeat(20)+`第${Number(line)+1}行语句`+'*'.repeat(20));
+      console.log(tokens);
+      printTree(res);
+    }
+  }
+  console.log('*'.repeat(20)+'语法分析日志信息'+'*'.repeat(20));
+  console.log(sInfo);
 }
 example2();
 
 
-// TODO 1 其他程序的文法
-// TODO 2 建立语法树<这个不难，就是在每次return true之前保存当前信息到对应数据结构>
-/** 复合语句文法如下
- * C -> {S}        // C:<复合语句>， S:<语句表>
+// TODO 其他程序的文法
+// ? ';'代表是这句的结尾，需要进行判断，或者需要将;加入到种别码表中
+/**
+ * S -> D | E  // S:<语句>, D:<声明>，E:<执行>
+ * D -> V | F |epsilon // V:<值声明>，F:<函数声明>
+ * V -> C | B  // C:<常量声明>，B:<变量声明>
+ * C -> const G T  // G:<常量类型>，T:<常量声明表>
+ * G -> int|char|float
+ * T -> typeid=H;|typeid=H,T  // H:<常量>
+ * H -> typenum | typestr
+ * B -> I J  // I:<变量类型>，J:<变量声明表>
+ * J -> K;|K,J  // K:<单变量声明>
+ * K -> typeid | typeid=L  // L:<表达式>
+ * I -> int|char|float
+ * F -> M typeid(N)  // M:<函数类型>，N:<函数声明形参列表>
+ * M -> int|char|float|void
+ * N -> P | epsilon  // P:<函数声明形参>
+ * P -> I|I,P  // 它这里规定了函数声明的形参列表只声明形参的类型，不声明变量，以示和函数定义区分
+ */
+
+// TODO 类似，不想做了
+
+/** if语句的文法 
+ * I -> if(E) C T
+ * T -> else C | epsilon 
+ * C -> {S}
  * S -> 
- */
-
-/** 常量声明文法如下
  * 
- */
+*/
+function ifs(){
 
-/** 变量声明文法如下
- * 
- */
+}
+async function sampleParse(tokensArr){
+
+}
