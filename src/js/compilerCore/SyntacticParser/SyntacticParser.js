@@ -296,6 +296,7 @@ async function example1() {
 }
 // example1()
 // TODO 文法含有回溯，没解决，通过代码解决的E,R1,R2,E4,R3
+// TODO 还有同类非终结符需要用终结符归类
 class Expression {
   constructor(tokens) {
     this.tokens = tokens;
@@ -329,6 +330,7 @@ class Expression {
       '219': '=', '220': '+=', '221': '-=', '222': '*=', '223': '/=', '224': '%=', '225': '++', '226': '--'
     }
     this.tool = null;
+    this.res = {};
   }
   async init(filePath) {
     console.log('-----------------------------语法分析相关--------------------------------');
@@ -358,7 +360,7 @@ class Expression {
   isCurInFirst(Xkey, X) {
     let token = this.tokens[this.pos];
     let sym = this.reCodeMap[token];
-    if(this.tool.firstSet.get(Xkey).get(X) === undefined)debugger
+    if (this.tool.firstSet.get(Xkey).get(X) === undefined) debugger
     return this.tool.firstSet.get(Xkey).get(X).has(sym);
   }
   isCurInFollow(X) {
@@ -377,44 +379,51 @@ class Expression {
     this.pos = prevPos;
     return false;
   }
+  // * 如何需要建立语法树的话就需要每次return当前已经建立的树或者false
   E() {
     let prevPos = this.pos;  // ! 几个终结符或起来的不能消耗字符，这里要回去(E,R1,R2需要这样)
+    let ctree = null;
     if (this.isCurInFirst('E', 'E1') &&
-      (this.E1() ||  // 错了pos才需要回去
+      (ctree = this.E1() ||  // 错了pos才需要回去
         this.backPos(prevPos))) {
-      return 1;
+      return { 'E1': ctree };  // 每一层加自身
     } else if (this.isCurInFirst('E', 'E2') &&
-      (this.E2() ||
+      (ctree = this.E2() ||
         this.backPos(prevPos))) {
-      return 2;
+      return { 'E2': ctree };  // 每一层加自身
     } else if (this.isCurInFirst('E', 'E3') &&
-      (this.E3() ||
+      (ctree = this.E3() ||
         this.backPos(prevPos))) {
-      return 3;
+      return { 'E3': ctree };  // 每一层加自身
     } else if (this.isCurInFirst('E', 'E4') &&
-      (this.E4() ||
+      (ctree = this.E4() ||
         this.backPos(prevPos))) {
-      return 4;
+      return { 'E4': ctree };  // 每一层加自身
     } else if (this.hasEpsilon('E') &&
       this.isCurInFollow('E')) {
       // 使用了epsilon  // TODO 不知道使用了epsilon有什么效果，该执行什么。
       // ? 应该是满足调节直接返回true就可以了，不消耗token，消耗文法，使用下一个文法符号
-      return true;
+      return 'epsilon';  // 每一层加自身
     } else {
-      return 0;
+      return false;
     }
   }
   E1() {
-    if (this.T() && this.E1_()) return true;
+    let ctree1 = null, ctree2 = null;
+    if ((ctree1 = this.T()) &&
+      (ctree2 = this.E1_()))
+      return { 'T': ctree1, "E1'": ctree2 };
     else return false;
   }
   E1_() {
     if (this.isMatch('+')) {
-      return this.E1();
+      let ctree = this.E1();
+      return ctree ? { '+': '+', 'E1': ctree } : false;
     } else if (this.isMatch('-')) {
-      return this.E1();
+      let ctree = this.E1();
+      return ctree ? { '-': '-', 'E1': ctree } : false;
     } else if (this.isCurInFollow("E1'")) {  // 这里就不用判断是否包含epsilon，因为直接可以判断
-      return true;
+      return 'epsilon';
     }
     else {
       this.info.push([this.pos, '期待为+或-'])
@@ -422,18 +431,24 @@ class Expression {
     }
   }
   T() {
-    if (this.R1() && this.T_()) return true;
+    let ctree1 = null, ctree2 = null;
+    if ((ctree1 = this.R1()) &&
+      (ctree2 = this.T_()))
+      return { 'R1': ctree1, "T'": ctree2 };
     else return false;
   }
   T_() {
     if (this.isMatch('*')) {
-      return this.T();
+      let ctree = this.T();
+      return ctree ? { '*': '*', 'T': ctree } : false;
     } else if (this.isMatch('/')) {
-      return this.T();
+      let ctree = this.T();
+      return ctree ? { '/': '/', 'T': ctree } : false;
     } else if (this.isMatch('%')) {
-      return this.T();
+      let ctree = this.T();
+      return ctree ? { '%': '%', 'T': ctree } : false;
     } else if (this.isCurInFollow("T'")) {
-      return true;
+      return 'epsilon';
     }
     else {
       this.info.push([this.pos, '期待为*/%'])
@@ -442,20 +457,24 @@ class Expression {
   }
   R1() {
     let prevPos = this.pos;  // ! 几个终结符或起来的不能消耗字符，这里要回去
+    let ctree = null;
     if (this.isMatch('(')) {
-      return this.E1() && this.isMatch(')');
+      ctree = this.E1();
+      return (ctree && this.isMatch(')')) ?
+        { '(': '(', 'E1': ctree, ')': ')' } :
+        false;
     } else if (this.isCurInFirst('R1', 'C') &&
-      (this.C() ||
+      (ctree = this.C() ||
         this.backPos(prevPos))) {
-      return true;
+      return { 'C': ctree };
     } else if (this.isCurInFirst('R1', 'V') &&
-      (this.V() ||
+      (ctree = this.V() ||
         this.backPos(prevPos))) {
-      return true;
+      return { 'V': ctree };
     } else if (this.isCurInFirst('R1', 'F') &&
-      (this.F() ||
+      (ctree = this.F() ||
         this.backPos(prevPos))) {
-      return true;
+      return { 'F': ctree };
     } else {
       this.info.push([this.pos, '期待为（或CVF对应的非终结符'])
       return false;
@@ -464,9 +483,9 @@ class Expression {
   C() {
     // 这种直接非终结符也可以判断是否属于first集，但没必要
     if (this.isMatch('typeint')) {
-      return true;
+      return 'typeint';
     } else if (this.isMatch('typechar')) {
-      return true;
+      return 'typechar';
     } else {
       this.info.push([this.pos, '期待为数字型常量或字符型常量'])
       return false;
@@ -474,39 +493,45 @@ class Expression {
   }
   V() {
     if (this.isMatch('typeid')) {
-      return true;
+      return 'typeid';
     } else {
       this.info.push([this.pos, '期待为标识符'])
       return false;
     }
   }
   F() {
+    let ctree = null;
     if (this.isMatch('typeid')) {
-      return this.isMatch('(') &&
-        this.L() &&
-        this.isMatch(')');
+      return (this.isMatch('(') &&
+        (ctree = this.L()) &&
+        this.isMatch(')')) ?
+        { 'typeid': 'typeid', '(': '(', 'L': ctree, ')': ')' } :
+        false;
     } else {
       this.info.push([this.pos, '期待为标识符'])
       return false;
     }
   }
   L() {
-    if (this.A()) {
-      return true;
+    let ctree = null;
+    if (ctree = this.A()) {
+      return { 'A': ctree };
     } else if (this.isCurInFollow('L')) {
-      return true;
+      return 'epsilon';
     } else return false;
   }
   A() {
-    if (this.E() && this.A_()) {
-      return true;
+    let ctree1 = null, ctree2 = null;
+    if ((ctree1 = this.E()) && (ctree2 = this.A_())) {
+      return { 'E': ctree1, "A'": ctree2 };
     } return false;
   }
   A_() {
     if (this.isMatch(',')) {
-      return this.A();
+      let ctree = this.A();
+      return ctree ? { ',': ',', 'A': ctree } : false;
     } else if (this.isCurInFollow("A'")) {
-      return true;
+      return 'epsilon';
     }
     else {
       this.info.push([this.pos, '期待为,'])
@@ -514,47 +539,52 @@ class Expression {
     }
   }
   E2() {
-    if (this.E1 && this.O() && this.E1) {
-      return true;
-    } return false;
+    let ctree1 = null, ctree2 = null, ctree3 = null;
+    if ((ctree1 = this.E1) && (ctree2 = this.O()) && (ctree3 = this.E1)) {
+      return { 'E1': ctree1, 'O': ctree2, 'E1': ctree3 };
+    } else return false;
   }
   O() {
-    if (this.isMatch('>')) return true;
-    else if (this.isMatch('<')) return true;
-    else if (this.isMatch('>=')) return true;
-    else if (this.isMatch('<=')) return true;
-    else if (this.isMatch('==')) return true;
-    else if (this.isMatch('!=')) return true;
+    if (this.isMatch('>')) return '>';
+    else if (this.isMatch('<')) return '<';
+    else if (this.isMatch('>=')) return '>=';
+    else if (this.isMatch('<=')) return '<=';
+    else if (this.isMatch('==')) return '==';
+    else if (this.isMatch('!=')) return '!=';
     else {
       this.info.push([this.pos, '期待为比较符'])
       return false;
     }
   }
   E3() {
-    if (this.B() && this.E3_()) {
-      return true;
+    let ctree1 = null, ctree2 = null;
+    if ((ctree1 = this.B()) && (ctree2 = this.E3_())) {
+      return { 'B': ctree1, "E3'": ctree2 };
     } return false;
   }
   E3_() {
     if (this.isMatch('||')) {
-      return this.E3();
+      let ctree = this.E3();
+      return ctree ? { '||': '||', 'E3': ctree } : false;
     } else if (this.isCurInFollow("E3'")) {
-      return true;
+      return 'epsilon';
     } else {
       this.info.push([this.pos, '期待为||'])
       return false;
     }
   }
   B() {
-    if (this.R2() && this.B_()) {
-      return true;
+    let ctree1 = null, ctree2 = null;
+    if ((ctree1 = this.R2()) && (ctree2 = this.B_())) {
+      return { 'R2': ctree1, "B'": ctree2 };
     } return false;
   }
   B_() {
     if (this.isMatch('&&')) {
-      return this.B();
+      let ctree = this.B();
+      return ctree ? { '&&': '&&', 'B': ctree } : false;
     } else if (this.isCurInFollow("B'")) {
-      return true;
+      return 'epsilon';
     } else {
       this.info.push([this.pos, '期待为&&'])
       return false;
@@ -562,16 +592,18 @@ class Expression {
   }
   R2() {
     let prevPos = this.pos;  // ! 几个终结符或起来的不能消耗字符，这里要回去
+    let ctree = null;
     if (this.isCurInFirst('R2', 'E1') &&
-      (this.E1() ||
+      (ctree = this.E1() ||
         this.backPos(prevPos)))
-      return true;
+      return { 'E1': ctree };
     else if (this.isCurInFirst('R2', 'E2') &&
-      (this.E2() ||
+      (ctree = this.E2() ||
         this.backPos(prevPos)))
-      return true;
+      return { 'E2': ctree };
     else if (this.isMatch('!')) {
-      return this.E3();
+      ctree = this.E3();
+      return ctree ? { '!': '!', 'E3': ctree } : false;
     } else {
       this.info.push([this.pos, '期待为E1E2或！'])
       return false;
@@ -579,57 +611,82 @@ class Expression {
   }
   E4() {
     let prevPos = this.pos;
+    let ctree = null;
     if (this.isCurInFirst('E4', "VE4'") &&
-      (this.V() ||
-        this.backPos(prevPos)))
-      return this.E4_();
+      (ctree = this.V() ||
+        this.backPos(prevPos))) {
+      let ctree_ = this.E4_();
+      return ctree_ ? { 'V': ctree, "E4'": ctree_ } : false;
+    }
     else if (this.isCurInFirst('E4', "R3E4''") &&
-      (this.R3() ||
-        this.backPos(prevPos)))
-      return this.E4__();
+      (ctree = this.R3() ||
+        this.backPos(prevPos))) {
+      let ctree_ = this.E4__();
+      return ctree_ ? { 'R3': ctree, "E4''": ctree_ } : false;
+    }
     else if (this.isCurInFirst('E4', "E4''R3") &&
-      (this.E4__() ||
-        this.backPos(prevPos)))
-      return this.R3();
+      (ctree = this.E4__() ||
+        this.backPos(prevPos))) {
+      let ctree_ = this.R3();
+      return ctree_ ? { "E4''": ctree, 'R3': ctree_ } : false;
+    }
     else return false;
   }
   E4_() {
     // TODO 这里(这类)明显冗余了，后续需要优化
     if (this.isMatch('=')) {
-      return this.E();
+      let ctree = this.E();
+      return ctree ? { '=': '=', 'E': ctree } : false;
     } else if (this.isMatch('+=')) {
-      return this.E();
+      let ctree = this.E();
+      return ctree ? { '+=': '+=', 'E': ctree } : false;
     } else if (this.isMatch('-=')) {
-      return this.E();
+      let ctree = this.E();
+      return ctree ? { '-=': '-=', 'E': ctree } : false;
     } else if (this.isMatch('*=')) {
-      return this.E();
+      let ctree = this.E();
+      return ctree ? { '*=': '*=', 'E': ctree } : false;
     } else if (this.isMatch('/=')) {
-      return this.E()
+      let ctree = this.E();
+      return ctree ? { '/=': '/=', 'E': ctree } : false;
     } else if (this.isMatch('%=')) {
-      return this.E();
+      let ctree = this.E();
+      return ctree ? { '%=': '%=', 'E': ctree } : false;
     } else return false
   }
   R3() {
     let prevPos = this.pos;
+    let ctree = null;
     if (this.isCurInFirst('R3', 'V') &&
-      (this.V() ||
+      (ctree = this.V() ||
         this.backPos(prevPos)))
-      return true;
+      return { 'V': ctree };
     else if (this.isCurInFirst('R3', 'F') &&
-      (this.F() ||
+      (ctree = this.F() ||
         this.backPos(prevPos)))
-      return true;
+      return { 'F': ctree };
     else return false;
   }
-  E4__() { 
-    if(this.isMatch('++'))return true;
-    else if(this.isMatch('--'))return true;
+  E4__() {
+    if (this.isMatch('++')) return '++';
+    else if (this.isMatch('--')) return '--';
     else {
       this.info.push([this.pos, '期待为++或--']);
       return false;
     }
   }
 }
+function printTree(tree, op = 1) {
+  for (let [k, v] of Object.entries(tree)) {
+    console.log('-'.repeat(op) + k);
+    if (typeof v !== 'object') {
+      console.log('-'.repeat(op + 1) + v);
+    } else {
+      printTree(v, op + 1);
+    }
+  }
+}
+
 
 async function example2() {
   const wr = new WordRecognition('C:/My_app/code/j3Complier/src/js/compilerCore/testCase/语法分析用例.txt');
@@ -637,13 +694,16 @@ async function example2() {
   const exp = new Expression(tokens[54]);
   await exp.init('C:/My_app/code/j3Complier/src/js/compilerCore/SyntacticParser/Grammar/expression.txt')
   console.log(tokens[54]);
-  console.log(exp.E());  // 通过返回的数字判断是否为表达式，为何种表达式
+  let res1 = exp.E()
+  printTree(res1)
   console.log(tokens[56]);
   exp.updateToken(tokens[56])
-  console.log(exp.E());
+  let res2 = exp.E()
+  printTree(res2);
   console.log(tokens[57]);
-  exp.updateToken(tokens[57]) 
-  console.log(exp.E());
+  exp.updateToken(tokens[57])
+  let res3 = exp.E()
+  printTree(res3);
 }
 example2();
 
