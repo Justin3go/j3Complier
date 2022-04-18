@@ -1,0 +1,27 @@
+E -> E1 | E2 | E3 | E4
+
+E1 -> T E1'
+E1' -> + E1 | - E1 | epsilon
+T -> R1 T'
+T' -> * T | / T | % T | epsilon
+R1 -> (E1) | C | V | F 
+C -> typeint | typechar 
+V -> typeid
+F -> typeid(L)
+L -> A | epsilon
+A -> E A'
+A' -> epsilon | ,A
+
+E2 -> E1OE1
+O -> > | < | >= | <= | == | !=
+
+E3 -> B E3'
+E3' -> || E3 | epsilon
+B -> R2 B'
+B' -> && B | epsilon
+R2 -> E1 | E2 | !E3
+
+E4 -> V E4' | R3 E4'' | E4'' R3
+E4' -> = E | += E | -= E | *= E | /= E | %= E 
+R3 -> V | F
+E4'' -> ++ | --

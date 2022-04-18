@@ -15,3 +15,25 @@ let parsedTokens = lexer.DFA.result.tokens;
 parsedTokens.forEach((token) => {
   console.log(token);
 });
+
+/** 算术表达式
+ * E1 -> T E1'
+ * E1' -> + E1 | - E1 | epsilon
+ * T -> R1 T'
+ * T' -> * T | / T | % T | epsilon
+ * R1 -> (E1) | C | V | F 
+ * C -> num|char 
+ * V -> id
+ * F -> id(L)
+ * L -> A | epsilon
+ * A -> E A'
+ * A' -> epsilon | ,A
+ */
+
+/** 布尔表达式
+ * E3 -> B E3'
+ * E3' -> || E3 | epsilon
+ * B -> R2 B'
+ * B' -> && B | epsilon
+ * R2 -> E1 | E2 | !E3
+ */
