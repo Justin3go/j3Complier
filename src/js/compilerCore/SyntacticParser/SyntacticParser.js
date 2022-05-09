@@ -75,9 +75,9 @@ class Tool {
     this.epsilonMap = new Map();
     // 定义一些正则表达式 
     this.patternVN = /[A-Z][0-9]*\'*/g;
-    this.patternVT = /[a-z]+|(\|\|)|(>=)|(<=)|(==)|(!=)|(\&\&)|(\+=)|(-=)|(\*=)|(\/=)|(%=)|(\+\+)|(--)|[\-\*\/%\(\),\+=!]/g;
+    this.patternVT = /[a-z]+|(\|\|)|(>=)|(<=)|(==)|(!=)|(\&\&)|(\+=)|(-=)|(\*=)|(\/=)|(%=)|(\+\+)|(--)|[\-\*\/%\(\),\+=!;{}]/g;
     // 注意这里不仅仅是上两的拼接，还加入了“|”
-    this.patternAll = /[A-Z][0-9]*\'*|[a-z]+|(\|\|)|(>=)|(<=)|(==)|(!=)|(\&\&)|(\+=)|(-=)|(\*=)|(\/=)|(%=)|(\+\+)|(--)|[\-\*\/%\(\),\+=!]/g;
+    this.patternAll = /[A-Z][0-9]*\'*|[a-z]+|(\|\|)|(>=)|(<=)|(==)|(!=)|(\&\&)|(\+=)|(-=)|(\*=)|(\/=)|(%=)|(\+\+)|(--)|[\-\*\/%\(\),\+=!;{}]/g;
   }
   processFile() {  // 读入文件
     let _this = this;
@@ -198,7 +198,7 @@ class Tool {
       }
       // 步骤四-2
       if (flag) {
-        items.push('epsilon')
+        items.add('epsilon')
       }
     }
     if (key && items.size !== 0) {
@@ -289,9 +289,9 @@ class Tool {
 }
 /* 使用示范 */
 async function example1() {
-  const tool = new Tool('C:/My_app/code/j3Complier/src/js/compilerCore/SyntacticParser/Grammar/expression.txt')
+  const tool = new Tool('C:/My_app/code/j3Complier/src/js/compilerCore/SyntacticParser/Grammar/G.txt')
   tool.init().then((v) => {
-    console.log(tool.followSet);
+    console.log(tool.splited);
   })
 }
 // example1()
@@ -529,7 +529,7 @@ class Expression {
   A_() {
     if (this.isMatch(',')) {
       let ctree = this.A();
-      return ctree ? { ',': ',', 'A': ctree } : false;
+      return ctree ? { ',': ',', "A'": ctree } : false;
     } else if (this.isCurInFollow("A'")) {
       return 'epsilon';
     }
@@ -693,87 +693,1004 @@ async function example2() {
   let [wInfo, error, tokensArr] = await wr.start();
   const exp = new Expression([]);
   await exp.init('C:/My_app/code/j3Complier/src/js/compilerCore/SyntacticParser/Grammar/expression.txt')
-  console.log('*'.repeat(20)+'first集'+'*'.repeat(20));
+  console.log('*'.repeat(20) + 'first集' + '*'.repeat(20));
   console.log(exp.tool.firstSet);
-  console.log('*'.repeat(20)+'follow集'+'*'.repeat(20));
+  console.log('*'.repeat(20) + 'follow集' + '*'.repeat(20));
   console.log(exp.tool.followSet);
   let sInfo = {};
-  for(let [line,tokens] of Object.entries(tokensArr)){
+  for (let [line, tokens] of Object.entries(tokensArr)) {
     exp.updateToken(tokens)
     let res = exp.E();
     exp.info.length && (sInfo[line] = exp.info); // 收集日志信息
-    if(res){
-      console.log('*'.repeat(20)+`第${Number(line)+1}行语句`+'*'.repeat(20));
+    if (res) {
+      console.log('*'.repeat(20) + `第${Number(line) + 1}行语句` + '*'.repeat(20));
       console.log(tokens);
       printTree(res);
     }
   }
-  console.log('*'.repeat(20)+'语法分析日志信息'+'*'.repeat(20));
+  console.log('*'.repeat(20) + '语法分析日志信息' + '*'.repeat(20));
   console.log(sInfo);
 }
-example2();
+// example2();
+// TODO TOKEN转换为流的话该如何记录其中的行号呢，就是错误处理的时候需要
 
-
-// ? ';'代表是这句的结尾，需要进行判断，或者需要将;加入到种别码表中
-
-/** 常量、变量、函数声明的文法
- * S -> D | E  // S:<语句>, D:<声明语句>，E:<执行语句>
- * D -> V | F |epsilon // V:<值声明>，F:<函数声明>
- * V -> C | B  // C:<常量声明>，B:<变量声明>
- * C -> const G T  // G:<常量类型>，T:<常量声明表>
- * G -> int|char|float
- * T -> typeid=H;|typeid=H,T  // H:<常量>
- * H -> typenum | typestr
- * B -> I J  // I:<变量类型>，J:<变量声明表>
- * J -> K;|K,J  // K:<单变量声明>
- * K -> typeid | typeid=L  // L:<表达式>
- * I -> int|char|float
- * F -> M typeid(N)  // M:<函数类型>，N:<函数声明形参列表>
- * M -> int|char|float|void
- * N -> P | epsilon  // P:<函数声明形参>
- * P -> I|I,P  // 它这里规定了函数声明的形参列表只声明形参的类型，不声明变量，以示和函数定义区分
- */
-
-/** 函数定义
- * F -> M typeid (L) // ! <复合语句>  // M: 函数类型, F: 函数定义, L: 函数形参列表
- * M -> int|char|float|void
- * L -> D | epsilon   // D: 函数定义形参
- * D -> I typeid|I typeid,D  // I: 变量类型
- * I -> int|char|float
- */
-
-/** 执行语句文法
- * E -> D | C | A   // E: 执行语句, D: 数据处理语句, C: 控制语句, A: 复合语句
- * D -> B | F  // B: 赋值语句, F: 函数调用语句
- * B -> G  // G: 赋值表达式
- * F -> H  // 函数调用
- * C -> I | O | W | W1 | R  // I: if语句, O: for语句, W: while语句, W1: dowhile语句, R: return语句
- * A -> { J }  // J: 语句表
- * TODO J -> <语句> | <语句> J  
- *+‘ 
- * I -> if (<表达式>)K | if(<表达式>)K else K
- * O -> for (<表达式>;<表达式>;<表达式>)L  // L: 循环语句
- * W -> while(<表达式>)L
- * W1 -> do M while(<表达式>); // M: 循环用复合语句
- * L -> <声明语句> | N | M  // N: 循环执行语句
- * M -> { P } // P: 循环语句表
- * P -> L | L P
- * N -> Q | O | W | W1 | R | T | U   // Q: 循环用if语句, T: break语句, U: continue语句
- * Q -> if(<表达式>)L | if(<表达式>)L else L
- * R -> return; | return <表达式>;
- * T -> break;
- * U -> continue; 
- */
-
-
-/** 入口函数
- * C -> S main()<复合语句>B  // B:<函数块>
- * B -> <函数定义><函数块>|epsilon
- */
-
-function ifs(){
-
-}
-async function sampleParse(tokensArr){
-
+// 1.终结符if调用match函数
+// 2.非终结符对应递归调用
+// 3.带或的就每次if判断其first集
+// 4.都不满足判断follow集，然后如果有epsilon就使用epsilon
+// ? 无或又包含终结符就直接跳过4，两个非终结符我记得能判断吧，不太确定
+// ! 只有显式的epsilon需要判断，非显式的会自动递归调用显式的函数
+// 5.报错
+class ParseSample {
+  constructor(tokens) {
+    this.tokens = tokens;
+    this.pos = 0;
+    this.info = [];
+    // TODO 把下方的映射单独封装到一个文件中
+    this.codeMap = {
+      'char': 101, 'int': 102, 'float': 103, 'break': 104,
+      'const': 105, 'return': 106, 'void': 107, 'continue': 108,
+      'do': 109, 'while': 110, 'if': 111, 'else': 112, 'for': 113,
+      'true': 114, 'false': 115, 'double': 116, 'extern': 117, 'unsigned': 118,
+      'register': 119, 'long': 120, 'static': 121,
+      '{': 301, '}': 302, ';': 303, ',': 304,
+      'typeint': 400, 'typechar': 500, 'typestr': 600, 'typeid': 700, 'typenum': 800,
+      '(': 201, ')': 202, '[': 203, ']': 204, '!': 205, '*': 206,
+      '/': 207, '%': 208, '+': 209, '-': 210, '<': 211, '<=': 212,
+      '>': 213, '>=': 214, '==': 215, '!=': 216, '&&': 217, '||': 218,
+      '=': 219, '+=': 220, '-=': 221, '*=': 222, '/=': 223, '%=': 224, '++': 225, '--': 226
+    };
+    this.reCodeMap = {
+      '101': 'char', '102': 'int', '103': 'float', '104': 'break',
+      '105': 'const', '106': 'return', '107': 'void', '108': 'continue',
+      '109': 'do', '110': 'while', '111': 'if', '112': 'else', '113': 'for',
+      '114': 'true', '115': 'false', '116': 'double', '117': 'extern', '118': 'unsigned',
+      '119': 'register', '120': 'long', '121': 'static',
+      '301': '{', '302': '}', '303': ';', '304': ',',
+      '400': 'typeint', '500': 'typechar', '600': 'typestr', '700': 'typeid', '800': 'typenum',
+      '201': '(', '202': ')', '203': '[', '204': ']', '205': '!', '206': '*',
+      '207': '/', '208': '%', '209': '+', '210': '-', '211': '<', '212': '<=',
+      '213': '>', '214': '>=', '215': '==', '216': '!=', '217': '&&', '218': '||',
+      '219': '=', '220': '+=', '221': '-=', '222': '*=', '223': '/=', '224': '%=', '225': '++', '226': '--'
+    }
+    this.tool = null;
+    this.res = {};
+  }
+  async init(filePath) {
+    console.log('-----------------------------语法分析相关--------------------------------');
+    const tool = new Tool(filePath)
+    await tool.init();
+    this.tool = tool;
+  }
+  // ! 总控程序中这个可能不需要
+  updateToken(tokens) {  // 再次使用这个实例，不过使用不同的tokens
+    this.tokens = tokens;
+    this.pos = 0;
+    this.info = [];  // TODO 最后在总控程序中，每行都要存储一下这个info，不然下次就会将其清除
+  }
+  testCode() {  // 测试种别码写对没有
+    for (let k of Object.keys(this.codeMap)) {
+      console.log(k === this.reCodeMap[this.codeMap[k]]);
+    }
+  }
+  isMatch(c) {
+    let code = this.codeMap[c];  // 转换为对应token
+    if (!code) console.error('文法中非终结符未找到对应种别码');
+    let curToken = this.tokens[this.pos];
+    if (curToken === code) {
+      this.pos++;  // 匹配了就消耗该字符
+      return true;
+    } else return false;
+  }
+  isCurInFirst(Xkey, X) {
+    let token = this.tokens[this.pos];
+    let sym = this.reCodeMap[token];
+    if (this.tool.firstSet.get(Xkey).get(X) === undefined) debugger
+    return this.tool.firstSet.get(Xkey).get(X).has(sym);
+  }
+  isCurInFollow(X) {
+    if (this.pos >= this.tokens.length) return true;  // 为undefined说明已经消耗完token了，所以匹配epsilon消耗文法也没事；
+    let token = this.tokens[this.pos];
+    let sym = this.reCodeMap[token];
+    return this.tool.followSet.get(X).has(sym);
+  }
+  hasEpsilon(X) {
+    let res = Array.from(this.tool.firstSet.get(X).values()).some((v) => {
+      return v.has('epsilon');
+    });
+    return res;
+  }
+  backPos(prevPos) {  // 为了在布尔表达式中修改pos值，同时不影响或的结果
+    this.pos = prevPos;
+    return false;
+  }
+  error(s) {
+    this.info.push([this.pos, s]);
+    return false;
+  }
+  E() {
+    let ctree = null;
+    if (this.isCurInFirst('E', 'E1')) {
+      ctree = this.E1();
+      return ctree ? { 'E1': ctree } : false;
+    } else if (this.isCurInFirst('E', 'E2')) {
+      ctree = this.E2();
+      return ctree ? { 'E2': ctree } : false;
+    } else if (this.isCurInFirst('E', 'E3')) {
+      ctree = this.E3();
+      return ctree ? { 'E3': ctree } : false;
+    } else if (this.isCurInFirst('E', 'E4')) {
+      ctree = this.E4();
+      return ctree ? { 'E4': ctree } : false;
+    } else {
+      return false;
+    }
+  }
+  E1() {
+    let ctree1 = null;
+    let ctree2 = null;
+    if ((ctree1 = this.I()) && (ctree2 = this.E1_())) {
+      return { 'I': ctree1, "E1'": ctree2 };
+    } else {
+      return false;
+    }
+  }
+  E1_() {
+    let ctree = null;
+    if (this.isMatch('+')) {
+      ctree = this.E1();
+      return ctree ? { '+': '+', 'E1': ctree } : false;
+    } else if (this.isMatch('-')) {
+      ctree = this.E1();
+      return ctree ? { '-': '-', 'E1': ctree } : false;
+    } else if (this.isCurInFollow("E1'")) {  // 直接有epsilon，所以不用判断是否有
+      return 'epsilon';
+    } else {
+      return this.error('期待为+或-');
+    }
+  }
+  I() {
+    let ctree1 = null;
+    let ctree2 = null;
+    if ((ctree1 = this.I1()) && (ctree2 = this.I_())) {
+      return { 'I1': ctree1, "I'": ctree2 };
+    } else {
+      return false;
+    }
+  }
+  I_() {
+    let ctree = null;
+    if (this.isMatch('*')) {
+      ctree = this.I();
+      return ctree ? { '*': '*', 'I': ctree } : false;
+    } else if (this.isMatch('/')) {
+      ctree = this.I();
+      return ctree ? { '/': '/', 'I': ctree } : false;
+    } else if (this.isMatch('%')) {
+      ctree = this.I();
+      return ctree ? { '%': '%', 'I': ctree } : false;
+    } else if (this.isCurInFollow("I'")) {
+      return 'epsilon';
+    } else {
+      return this.error('期待为*/%');
+    }
+  }
+  I1() {
+    let ctree = null;
+    if (this.isMatch('(')) {
+      ctree = this.E1();
+      return (ctree && this.isMatch(')'))
+        ? { '(': '(', 'E1': ctree, ')': ')' }
+        : false;
+    } else if (this.isCurInFirst('I1', 'C')) {
+      ctree = this.C();
+      return ctree ? { 'C': ctree } : false;
+    } else if (this.isCurInFirst('I1', 'V')) {
+      ctree = this.C();
+      return ctree ? { 'V': ctree } : false;
+    } else if (this.isCurInFirst('I1', 'F')) {
+      ctree = this.F();
+      return ctree ? { 'F': ctree } : false;
+    } else {
+      return this.error('期待为（或CVF对应的非终结符');
+    }
+  }
+  C() {
+    if (this.isMatch('typenum')) {
+      return 'typenum';
+    } else if (this.isMatch('typechar')) {
+      return 'typechar';
+    } else {
+      return this.error('期待为数字型常量或字符型常量');
+    }
+  }
+  V() {
+    if (this.isMatch('typeid')) {
+      return 'typeid';
+    } else {
+      return this.error('期待为标识符');
+    }
+  }
+  F() {
+    if (this.isMatch('typeid')) {
+      let ctree = null;
+      return (this.isMatch('(')
+        && (ctree = this.L())
+        && this.isMatch(')'))
+        ? { 'typeid': 'typeid', '(': '(', 'L': ctree, ')': ')' }
+        : false;
+    } else {
+      return this.error('期待为标识符');
+    }
+  }
+  L() {
+    let ctree = this.A();
+    if (ctree) {
+      return { 'A': ctree };
+    } else if (this.isCurInFollow('L')) {
+      return 'epsilon';
+    } else {
+      return false;
+    }
+  }
+  A() {
+    let ctree1 = null;
+    let ctree2 = null;
+    if ((ctree1 = this.E()) && (ctree2 = this.A_())) {
+      return { 'E': ctree1, "A'": ctree2 };
+    } else {
+      return false;
+    }
+  }
+  A_() {
+    if (this.isCurInFollow("A'")) {
+      return 'epsilon';
+    } else if (this.isMatch(',')) {
+      let ctree = this.A();
+      return ctree ? { ',': ',', "A'": ctree } : false;
+    } else {
+      return this.error('期待为,');
+    }
+  }
+  E2() {
+    let ctree1 = null;
+    let ctree2 = null;
+    let ctree3 = null;
+    if ((ctree1 = this.E1()) && (ctree2 = this.O()) && (ctree3 = this.E1())) {
+      return { 'E1': ctree1, 'O': ctree2, 'E1': ctree3 };
+    } else {
+      return false;
+    }
+  }
+  O() {
+    if (this.isMatch('>')) return '>';
+    else if (this.isMatch('<')) return '<';
+    else if (this.isMatch('>=')) return '>=';
+    else if (this.isMatch('<=')) return '<=';
+    else if (this.isMatch('==')) return '==';
+    else if (this.isMatch('!=')) return '!=';
+    else {
+      return this.error('期待为比较符');
+    }
+  }
+  E3() {
+    let ctree1 = null, ctree2 = null;
+    if ((ctree1 = this.I2()) && (ctree2 = this.E3_())) {
+      return { 'I2': ctree1, "E3'": ctree2 };
+    } else {
+      return false;
+    }
+  }
+  E3_() {
+    if (this.isMatch('||')) {
+      let ctree = this.E3();
+      return ctree ? { '||': '||', 'E3': ctree } : false;
+    } else if (this.isCurInFollow("E3'")) {
+      return 'epsilon';
+    } else {
+      return this.error('期待为||');
+    }
+  }
+  I2() {
+    let ctree1 = null, ctree2 = null;
+    if ((ctree1 = this.I3()) && (ctree2 = this.I2_())) {
+      return { 'I3': ctree1, "I2'": ctree2 };
+    } else {
+      return false;
+    }
+  }
+  I2_() {
+    if (this.isMatch('&&')) {
+      let ctree = this.I2();
+      return ctree ? { '&&': '&&', 'I2': ctree } : false;
+    } else {
+      return this.error('期待为&&');
+    }
+  }
+  I3() {
+    let ctree = null;
+    if (this.isCurInFirst('I3', 'E1')) {
+      ctree = this.E1();
+      return ctree ? { 'E1': ctree } : false;
+    } else if (this.isCurInFirst('I3', 'E1')) {
+      ctree = this.E2();
+      return ctree ? { 'E1': ctree } : false;
+    } else if (this.isMatch('!')) {
+      ctree = this.E3();
+      return ctree ? { '!': '!', 'E3': ctree } : false;
+    } else {
+      return this.error('期待为E1E2或！');
+    }
+  }
+  E4() {
+    let ctree1 = null;
+    let ctree2 = null;
+    if (this.isCurInFirst('E4', "VE4'")) {
+      ctree1 = this.V();
+      ctree2 = this.E4_();
+      return (ctree1 && ctree2) ? { 'V': ctree1, "E4'": ctree2 } : false;
+    } else if (this.isCurInFirst('E4', "RE4''")) {
+      ctree1 = this.R();
+      ctree2 = this.E4__();
+      return (ctree1 && ctree2) ? { 'R': ctree1, "E4''": ctree2 } : false;
+    } else if (this.isCurInFirst('E4', "E4''R")) {
+      ctree1 = this.E4__();
+      ctree2 = this.R();
+      return (ctree1 && ctree2) ? { "E4''": ctree1, 'R': ctree2 } : false;
+    } else {
+      return false;
+    }
+  }
+  E4_() {
+    // TODO 这里(这类)明显冗余了，后续需要优化
+    if (this.isMatch('=')) {
+      let ctree = this.E();
+      return ctree ? { '=': '=', 'E': ctree } : false;
+    } else if (this.isMatch('+=')) {
+      let ctree = this.E();
+      return ctree ? { '+=': '+=', 'E': ctree } : false;
+    } else if (this.isMatch('-=')) {
+      let ctree = this.E();
+      return ctree ? { '-=': '-=', 'E': ctree } : false;
+    } else if (this.isMatch('*=')) {
+      let ctree = this.E();
+      return ctree ? { '*=': '*=', 'E': ctree } : false;
+    } else if (this.isMatch('/=')) {
+      let ctree = this.E();
+      return ctree ? { '/=': '/=', 'E': ctree } : false;
+    } else if (this.isMatch('%=')) {
+      let ctree = this.E();
+      return ctree ? { '%=': '%=', 'E': ctree } : false;
+    } else {
+      return this.error('期待为=或某等');
+    }
+  }
+  R() {
+    let ctree = null;
+    if (this.isCurInFirst('R', 'V')) {
+      ctree = this.V();
+      return ctree ? { 'V': ctree } : false;
+    } else if (this.isCurInFirst('R', 'F')) {
+      ctree = this.F();
+      return ctree ? { 'F': ctree } : false;
+    } else {
+      return false;
+    }
+  }
+  E4__() {
+    if (this.isMatch('++')) {
+      return '++';
+    }
+    else if (this.isMatch('--')) {
+      return '--';
+    }
+    else {
+      return this.error('期待为++或--');
+    }
+  }
+  S() {
+    let ctree = null;
+    if (this.isCurInFirst('S', 'S1')) {
+      ctree = this.S1();
+      return ctree ? { 'S1': ctree } : false;
+    } else if (this.isCurInFirst('S', 'S2')) {
+      ctree = this.S2();
+      return ctree ? { 'S2': ctree } : false;
+    } else {
+      return false;
+    }
+  }
+  S1() {
+    let ctree = null;
+    if (this.isCurInFirst('S1', 'U')) {
+      ctree = this.U();
+      return ctree ? { 'U': ctree } : false;
+    } else if (this.isCurInFirst('S1', 'F1')) {
+      ctree = this.F1();
+      return ctree ? { 'F1': ctree } : false;
+    } else if (this.isCurInFollow('S1')) {
+      return 'epsilon';
+    } else {
+      return false;
+    }
+  }
+  U() {
+    let ctree = null;
+    if (this.isCurInFirst('U', 'C1')) {
+      ctree = this.C1();
+      return ctree ? { 'C1': ctree } : false;
+    } else if (this.isCurInFirst('U', 'V1')) {
+      ctree = this.V1();
+      return ctree ? { 'V1': ctree } : false;
+    } else {
+      return false;
+    }
+  }
+  C1() {
+    if (this.isMatch('const')) {
+      let ctree1 = this.C2();
+      let ctree2 = this.T();
+      return (ctree1 && ctree2) ? { 'const': 'const', 'C2': ctree1, 'T': ctree2 } : false;
+    } else {
+      return this.error('期待为const开始');
+    }
+  }
+  C2() {
+    if (this.isMatch('int')) {
+      return 'int';
+    } else if (this.isMatch('char')) {
+      return 'char';
+    } else if (this.isMatch('float')) {
+      return 'float';
+    } else {
+      return this.error('期待为intcharfloat');
+    }
+  }
+  T() {
+    if (this.isMatch('typeid')) {
+      let f = this.isMatch('=');
+      let ctree1 = this.C();
+      let ctree2 = this.T_();
+      return (f && ctree1 && ctree2)
+        ? { 'typeid': 'typeid', 'C': ctree1, "T'": ctree2 }
+        : false;
+    } else {
+      return this.error('期待为标识符');
+    }
+  }
+  T_() {
+    if (this.isMatch(';')) {
+      return ';';
+    } else if (this.isMatch(',')) {
+      let ctree = this.T();
+      return ctree ? { ';': ';', 'T': ctree } : false;
+    } else {
+      return this.error('期待为;,');
+    }
+  }
+  V1() {
+    let ctree1 = null;
+    let ctree2 = null
+    if ((ctree1 = this.V2()) && (ctree2 = this.T1())) {
+      return { 'V2': ctree1, 'T1': ctree2 };
+    } else {
+      return false;
+    }
+  }
+  T1() {
+    let ctree1 = null;
+    let ctree2 = null
+    if ((ctree1 = this.V4()) && (ctree2 = this.T1_())) {
+      return { 'V4': ctree1, "T1'": ctree2 };
+    } else {
+      return false;
+    }
+  }
+  T1_() {
+    if (this.isMatch(';')) {
+      return ';';
+    } else if (this.isMatch(',')) {
+      let ctree = this.T1();
+      return ctree ? { ',': ',', 'T1': ctree } : false;
+    } else {
+      return this.error('期待为;,');
+    }
+  }
+  V4() {
+    let ctree1 = null;
+    let ctree2 = null;
+    if ((ctree1 = this.V()) && (ctree2 = this.V4_())) {
+      return { 'V': ctree1, "V4'": ctree2 };
+    } else {
+      return false;
+    }
+  }
+  V4_() {
+    if (this.isCurInFollow("V4'")) {
+      return 'epsilon';
+    } else if (this.isMatch('=')) {
+      let ctree = this.E();
+      return ctree ? { '=': '=', 'E': ctree } : false;
+    } else {
+      return this.error('期待为=');
+    }
+  }
+  V2() {
+    if (this.isMatch('int')) {
+      return 'int';
+    } else if (this.isMatch('char')) {
+      return 'char';
+    } else if (this.isMatch('float')) {
+      return 'float';
+    } else {
+      return this.error('期待为intcharfloat');
+    }
+  }
+  F1() {
+    let ctree1 = null;
+    let ctree2 = null;
+    if ((ctree1 = this.F2())
+      && this.isMatch('typeid')
+      && this.isMatch('(')
+      && (ctree2 = this.L1())
+      && this.isMatch(')')
+      && this.isMatch(';')) {
+      return { 'F2': ctree1, 'typeid': 'typeid', '(': '(', 'L1': ctree2, ')': ')', ';': ';' };
+    } else {
+      return this.error('期待为F1');  // TODO 后续再把这个错误做个解释
+    }
+  }
+  F2() {
+    if (this.isMatch('int')) {
+      return 'int';
+    } else if (this.isMatch('char')) {
+      return 'char';
+    } else if (this.isMatch('float')) {
+      return 'float';
+    } else if (this.isMatch('void')) {
+      return 'void';
+    } else {
+      return this.error('期待为intcharfloatvoid');
+    }
+  }
+  L1() {
+    let ctree = this.A1();
+    if (ctree) {
+      return { 'A1': ctree };
+    } else if (this.isCurInFollow('L1')) {
+      return 'epsilon';
+    } else {
+      return false;
+    }
+  }
+  A1() {
+    let ctree1 = null;
+    let ctree2 = null;
+    if ((ctree1 = this.V2()) && (ctree2 = this.A1_())) {
+      return { 'V2': ctree1, "A1'": ctree2 };
+    } else {
+      return false;
+    }
+  }
+  A1_() {
+    if (this.isCurInFollow("A1'")) {
+      return 'epsilon';
+    } else if (this.isMatch(',')) {
+      let ctree = this.A1();
+      return ctree ? { ',': ',', 'A1': ctree } : false;
+    } else {
+      return this.error('期待为A1_');
+    }
+  }
+  S2() {
+    let ctree = null;
+    if (this.isCurInFirst('S2', 'S3')) {
+      ctree = this.S3();
+      return ctree ? { 'S3': ctree } : false;
+    } else if (this.isCurInFirst('S2', 'S4')) {
+      ctree = this.S4();
+      return ctree ? { 'S4': ctree } : false;
+    } else if (this.isCurInFirst('S2', 'S5')) {
+      ctree = this.S5();
+      return ctree ? { 'S5': ctree } : false;
+    } else {
+      return false;
+    }
+  }
+  S3() {
+    if (this.isCurInFirst('S3', 'S6')) {
+      ctree = this.S6();
+      return ctree ? { 'S6': ctree } : false;
+    } else if (this.isCurInFirst('S3', 'S7')) {
+      ctree = this.S7();
+      return ctree ? { 'S7': ctree } : false;
+    } else {
+      return false;
+    }
+  }
+  S6() {
+    let ctree = this.E4();
+    if (ctree && this.isMatch(';')) {
+      return { 'E4': ctree, ';': ';' };
+    } else {
+      return this.error('期待为S6');
+    }
+  }
+  S7() {
+    let ctree = this.F();
+    if (ctree && this.isMatch(';')) {
+      return { 'F': ctree, ';': ';' };
+    } else {
+      return this.error('期待为S7');
+    }
+  }
+  S4() {
+    let ctree = null;
+    if (this.isCurInFirst('S4', 'X1')) {
+      ctree = this.X1();
+      return ctree ? { 'X1': ctree } : false;
+    } else if (this.isCurInFirst('S4', 'X2')) {
+      ctree = this.X2();
+      return ctree ? { 'X2': ctree } : false;
+    } else if (this.isCurInFirst('S4', 'X3')) {
+      ctree = this.X3();
+      return ctree ? { 'X3': ctree } : false;
+    } else if (this.isCurInFirst('S4', 'X4')) {
+      ctree = this.X4();
+      return ctree ? { 'X4': ctree } : false;
+    } else if (this.isCurInFirst('S4', 'X5')) {
+      ctree = this.X5();
+      return ctree ? { 'X5': ctree } : false;
+    } else {
+      return false;
+    }
+  }
+  S5() {
+    if (this.isMatch('{')) {
+      let ctree = this.T3();
+      let f = this.isMatch('}');
+      return (ctree && f) ? { '{': '{', 'T3': ctree, '}': '}' } : false;
+    } else {
+      return this.error('期待为S5')
+    }
+  }
+  T3() {
+    let ctree1 = null;
+    let ctree2 = null;
+    if ((ctree1 = this.S()) && (ctree2 = this.T3_())) {
+      return { 'S': ctree1, "T3'": ctree2 };
+    } else {
+      return false;
+    }
+  }
+  T3_() {
+    let ctree = null;
+    if (this.isCurInFollow("T3'")) {
+      return 'epsilon';
+    } else if (ctree = this.T3()) {
+      return { 'T3': ctree };
+    } else {
+      return false;
+    }
+  }
+  X1() {
+    let ctree1 = null;
+    let ctree2 = null;
+    let ctree3 = null;
+    if (this.isMatch('if')
+      && this.isMatch('(')
+      && (ctree1 = this.E())
+      && this.isMatch(')')
+      && (ctree2 = this.S())
+      && (ctree3 = this.X1_())) {
+      return { 'if': 'if', '(': '(', 'E': ctree1, ')': ')', 'S': ctree2, "X1'": ctree3 };
+    }
+  }
+  X1_() {
+    if (this.isCurInFollow("X1'")) {
+      return 'epsilon';
+    } else if (this.isMatch('else')) {
+      let ctree = this.S();
+      return ctree ? { 'else': 'else', 'S': ctree } : false;
+    } else {
+      return this.error('期待为X1_');
+    }
+  }
+  X2() {
+    let ctree1 = null;
+    let ctree2 = null;
+    let ctree3 = null;
+    let ctree4 = null;
+    if (this.isMatch('for')
+      && this.isMatch('(')
+      && (ctree1 = this.E())
+      && this.isMatch(';')
+      && (ctree2 = this.E())
+      && this.isMatch(';')
+      && (ctree3 = this.E())
+      && this.isMatch(')')
+      && (ctree4 = this.P())) {
+      return {
+        'for': 'for',
+        '(': '(',
+        'E': ctree1,
+        ';': ';',
+        'E': ctree2,
+        ';': ';',
+        'E': ctree3,
+        ')': ')',
+        'P': ctree4
+      };
+    } else {
+      return this.error('期待为X2')  // TODO 检查一遍error前是否有return
+    }
+  }
+  X3() {
+    let ctree1 = null;
+    let ctree2 = null;
+    if (this.isMatch('while')
+      && this.isMatch('(')
+      && (ctree1 = this.E())
+      && this.isMatch(')')
+      && (ctree2 = this.P())) {
+      return {
+        'while': 'while',
+        '(': '(',
+        'E': ctree1,
+        ')': ')',
+        'P': ctree2
+      }
+    } else {
+      return this.error('期待为X3');
+    }
+  }
+  X4() {
+    let ctree1 = null;
+    let ctree2 = null;
+    if (this.isMatch('do')
+      && (ctree1 = this.P1())
+      && this.isMatch('while')
+      && this.isMatch('(')
+      && (ctree2 = this.E())
+      && this.isMatch(')')
+      && this.isMatch(';')) {
+      return {
+        'do': 'do',
+        'P1': ctree1,
+        'while': 'while',
+        '(': '(',
+        'E': 'E',
+        ')': ')',
+        ';': ';'
+      };
+    } else {
+      return this.error('期待为X4');
+    }
+  }
+  P() {
+    let ctree = null;
+    if (this.isCurInFirst('P', 'S1')) {
+      ctree = this.S1();
+      return ctree ? { 'S1': ctree } : false;
+    } else if (this.isCurInFirst('P', 'P2')) {
+      ctree = this.P2();
+      return ctree ? { 'P2': ctree } : false;
+    } else if (this.isCurInFirst('P', 'P1')) {
+      ctree = this.P1();
+      return ctree ? { 'P1': ctree } : false;
+    } else {
+      return false;
+    }
+  }
+  P1() {
+    if (this.isMatch('{')) {
+      let ctree = this.T4();
+      let f = this.isMatch('}');
+      return (ctree && f) ? { '{': '{', 'T4': ctree, '}': '}' } : false;
+    } else {
+      return this.error('期待为P1');
+    }
+  }
+  T4() {
+    let ctree1 = null;
+    let ctree2 = null;
+    if ((ctree1 = this.P()) && (ctree2 = this.T4_())) {
+      return { 'P': ctree1, "T4'": ctree2 };
+    } else {
+      return false;
+    }
+  }
+  T4_() {
+    let ctree = null;
+    if (this.isCurInFollow("T4'")) {
+      return 'epsilon';
+    } else if (ctree = this.T4()) {
+      return { 'T4': ctree };
+    } else {
+      return false;
+    }
+  }
+  P2() {
+    let ctree = null;
+    if (this.isCurInFirst('P2', 'P3')) {
+      ctree = this.P3();
+      return ctree ? { 'P3': ctree } : false;
+    } else if (this.isCurInFirst('P2', 'X2')) {
+      ctree = this.X2();
+      return ctree ? { 'X2': ctree } : false;
+    } else if (this.isCurInFirst('P2', 'X3')) {
+      ctree = this.X3();
+      return ctree ? { 'X3': ctree } : false;
+    } else if (this.isCurInFirst('P2', 'X4')) {
+      ctree = this.X4();
+      return ctree ? { 'X4': ctree } : false;
+    } else if (this.isCurInFirst('P2', 'X5')) {
+      ctree = this.X5();
+      return ctree ? { 'X5': ctree } : false;
+    } else if (this.isCurInFirst('P2', 'X6')) {
+      ctree = this.X6();
+      return ctree ? { 'X6': ctree } : false;
+    } else if (this.isCurInFirst('P2', 'X7')) {
+      ctree = this.X7();
+      return ctree ? { 'X7': ctree } : false;
+    } else {
+      return false;
+    }
+  }
+  P3() {
+    let ctree1 = null;
+    let ctree2 = null;
+    let ctree3 = null;
+    if (this.isMatch('if')
+      && this.isMatch('(')
+      && (ctree1 = this.E())
+      && this.isMatch(')')
+      && (ctree2 = this.P())
+      && (ctree3 = this.P3_())) {
+      return {
+        'if': 'if',
+        '(': '(',
+        "E": ctree1,
+        ')': ')',
+        'P': ctree2,
+        "P3'": ctree3
+      }
+    } else {
+      return this.error('期待为P3')
+    }
+  }
+  P3_() {
+    if (this.isCurInFollow("P3'")) {
+      return 'epsilon';
+    } else if (this.isMatch('else')) {
+      let ctree = this.P();
+      return ctree ? { 'else': 'else', 'P': ctree } : false;
+    } else {
+      return this.error('期待为P3_');
+    }
+  }
+  X5() {
+    if (this.isMatch('return')) {
+      let ctree = this.X5_();
+      return ctree ? { 'return': 'return', "X5'": ctree } : false;
+    } else {
+      return this.error('期待为X5');
+    }
+  }
+  X5_() {
+    let ctree = null;
+    if (this.isMatch(';')) {
+      return ';';
+    } else if ((ctree = this.E())
+      && this.isMatch(';')) {
+      return { 'E': ctree, ';': ';' };
+    } else {
+      return this.error('期待为X5_');
+    }
+  }
+  X6() {
+    if (this.isMatch('break') && this.isMatch(';')) {
+      return { 'break': 'break', ';': ';' };
+    } else {
+      return this.error('期待为X6');
+    }
+  }
+  X7() {
+    if (this.isMatch('continue') && this.isMatch(';')) {
+      return { 'continue': 'continue', ';': ';' };
+    } else {
+      return this.error('期待为X7');
+    }
+  }
+  F3() {
+    let ctree1 = null;
+    let ctree2 = null;
+    let ctree3 = null;
+    if ((ctree1 = this.F2())
+      && this.isMatch('typeid')
+      && this.isMatch('(')
+      && (ctree2 = this.L2())
+      && this.isMatch(')')
+      && (ctree3 = this.S5())) {
+      return {
+        'F2': ctree1,
+        'typeid': 'typeid',
+        '(': '(',
+        'L2': ctree2,
+        ')': ')',
+        'S5': ctree3
+      }
+    }
+  }
+  L2() {
+    let ctree = null;
+    if (ctree = this.A2()) {
+      return { 'A2': ctree };
+    } else if (this.isCurInFollow('L2')) {
+      return 'epsilon';
+    } else {
+      return false;
+    }
+  }
+  A2() {
+    let ctree1 = null;
+    let ctree2 = null;
+    if ((ctree1 = this.V2())
+      && this.isMatch('typeid')
+      && (ctree2 = this.A2_())) {
+      return {
+        'V2': ctree1,
+        'typeid': typeid,
+        "A2'": ctree2
+      }
+    } else {
+      return this.error('期待为A2');
+    }
+  }
+  A2_() {
+    if (this.isCurInFollow("A2'")) {
+      return 'epsilon';
+    } else if (this.isMatch(',')) {
+      let ctree = this.A2();
+      return ctree ? { ',': ',', 'A2': ctree } : false;
+    } else {
+      return this.error('期待为A2_');
+    }
+  }
+  M() {
+    let ctree1 = null;
+    let ctree2 = null;
+    let ctree3 = null;
+    if ((ctree1 = this.S1())
+      && this.isMatch('main')
+      && this.isMatch('(')
+      && this.isMatch(')')
+      && (ctree2 = this.S5())
+      && (ctree3 = this.F4())) {
+        return {
+          'S1':ctree1,
+          'main':'main',
+          '(':'(',
+          ')':')',
+          'S5':'S5',
+          'F4':'F4'
+        }
+    }else {
+      return this.error('期待为M');
+    }
+  }
+  F4() {
+    let ctree1 = null;
+    let ctree2 = null;
+    if((ctree1 = this.F3()) && (ctree2 = this.F4())){
+      return {
+        'F3': ctree1,
+        'F4': ctree2
+      }
+    }else if(this.isCurInFollow('F4')){
+      return 'epsilon';
+    }else {
+      return false;
+    }
+  }
 }
