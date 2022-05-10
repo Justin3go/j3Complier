@@ -725,6 +725,8 @@ class ParseSample {
   constructor(tokens) {
     this.tokens = tokens;
     this.pos = 0;
+    this.lines = Object.keys(tokens);
+    this.INDEX = 0;
     this.info = [];
     // TODO 把下方的映射单独封装到一个文件中
     this.codeMap = {
@@ -732,29 +734,33 @@ class ParseSample {
       'const': 105, 'return': 106, 'void': 107, 'continue': 108,
       'do': 109, 'while': 110, 'if': 111, 'else': 112, 'for': 113,
       'true': 114, 'false': 115, 'double': 116, 'extern': 117, 'unsigned': 118,
-      'register': 119, 'long': 120, 'static': 121,
+      'register': 119, 'long': 120, 'static': 121, 'main': 122,
       '{': 301, '}': 302, ';': 303, ',': 304,
       'typeint': 400, 'typechar': 500, 'typestr': 600, 'typeid': 700, 'typenum': 800,
       '(': 201, ')': 202, '[': 203, ']': 204, '!': 205, '*': 206,
       '/': 207, '%': 208, '+': 209, '-': 210, '<': 211, '<=': 212,
       '>': 213, '>=': 214, '==': 215, '!=': 216, '&&': 217, '||': 218,
-      '=': 219, '+=': 220, '-=': 221, '*=': 222, '/=': 223, '%=': 224, '++': 225, '--': 226
+      '=': 219, '+=': 220, '-=': 221, '*=': 222, '/=': 223, '%=': 224,
+      '++': 225, '--': 226, '&': 227, '|': 228,
+      ',': 901, ';': 902,
     };
     this.reCodeMap = {
       '101': 'char', '102': 'int', '103': 'float', '104': 'break',
       '105': 'const', '106': 'return', '107': 'void', '108': 'continue',
       '109': 'do', '110': 'while', '111': 'if', '112': 'else', '113': 'for',
       '114': 'true', '115': 'false', '116': 'double', '117': 'extern', '118': 'unsigned',
-      '119': 'register', '120': 'long', '121': 'static',
+      '119': 'register', '120': 'long', '121': 'static', '122': 'main',
       '301': '{', '302': '}', '303': ';', '304': ',',
       '400': 'typeint', '500': 'typechar', '600': 'typestr', '700': 'typeid', '800': 'typenum',
       '201': '(', '202': ')', '203': '[', '204': ']', '205': '!', '206': '*',
       '207': '/', '208': '%', '209': '+', '210': '-', '211': '<', '212': '<=',
       '213': '>', '214': '>=', '215': '==', '216': '!=', '217': '&&', '218': '||',
-      '219': '=', '220': '+=', '221': '-=', '222': '*=', '223': '/=', '224': '%=', '225': '++', '226': '--'
+      '219': '=', '220': '+=', '221': '-=', '222': '*=', '223': '/=', '224': '%=',
+      '225': '++', '226': '--', '227': '&', '228': '|',
+      '901': ',', '902': ';',
     }
     this.tool = null;
-    this.res = {};
+    this.res = [];
   }
   async init(filePath) {
     console.log('-----------------------------语法分析相关--------------------------------');
@@ -773,55 +779,103 @@ class ParseSample {
       console.log(k === this.reCodeMap[this.codeMap[k]]);
     }
   }
+  getCurToken() {
+    let line = this.lines[this.INDEX];
+    if (line === undefined) return undefined;
+    let curToken = this.tokens[line][this.pos];
+    return curToken;
+  }
   isMatch(c) {
     let code = this.codeMap[c];  // 转换为对应token
     if (!code) console.error('文法中非终结符未找到对应种别码');
-    let curToken = this.tokens[this.pos];
+    let curToken = this.getCurToken();
     if (curToken === code) {
-      this.pos++;  // 匹配了就消耗该字符
+      this.getNext();
       return true;
     } else return false;
   }
+  getNext() {
+    this.pos++;  // 消耗该字符
+    let line = this.lines[this.INDEX];
+    if (this.pos >= this.tokens[line].length) {
+      this.INDEX++;  // 跳到下一行开始
+      this.pos = 0;
+    }
+  }
   isCurInFirst(Xkey, X) {
-    let token = this.tokens[this.pos];
+    let token = this.getCurToken();
     let sym = this.reCodeMap[token];
     if (this.tool.firstSet.get(Xkey).get(X) === undefined) debugger
     return this.tool.firstSet.get(Xkey).get(X).has(sym);
   }
   isCurInFollow(X) {
-    if (this.pos >= this.tokens.length) return true;  // 为undefined说明已经消耗完token了，所以匹配epsilon消耗文法也没事；
-    let token = this.tokens[this.pos];
+    if (this.lines[this.INDEX] === undefined) return true;  // 为undefined说明已经消耗完token了，所以匹配epsilon消耗文法也没事；
+    let token = this.getCurToken();
     let sym = this.reCodeMap[token];
     return this.tool.followSet.get(X).has(sym);
   }
+  // 应该不需要
   hasEpsilon(X) {
     let res = Array.from(this.tool.firstSet.get(X).values()).some((v) => {
       return v.has('epsilon');
     });
     return res;
   }
-  backPos(prevPos) {  // 为了在布尔表达式中修改pos值，同时不影响或的结果
-    this.pos = prevPos;
-    return false;
-  }
   error(s) {
-    this.info.push([this.pos, s]);
+    this.info.push([this.lines[this.INDEX], this.pos, s]);
     return false;
   }
-  E() {
+  parser() {
+    while (!this.isMatch('main')) {
+      let ctree = null;
+      if (ctree = this.S1()) {
+        if (ctree === 'epsilon') break;
+        this.res.push(ctree);
+      } else {
+        this.getNext(); // 尝试下一个字符
+      }
+    }
+    if (this.isMatch('(') && this.isMatch(')')) {
+      this.res.push('main()')
+    } else {
+      this.error('main()无法识别');
+    }
     let ctree = null;
-    if (this.isCurInFirst('E', 'E1')) {
-      ctree = this.E1();
-      return ctree ? { 'E1': ctree } : false;
-    } else if (this.isCurInFirst('E', 'E2')) {
-      ctree = this.E2();
-      return ctree ? { 'E2': ctree } : false;
-    } else if (this.isCurInFirst('E', 'E3')) {
-      ctree = this.E3();
-      return ctree ? { 'E3': ctree } : false;
-    } else if (this.isCurInFirst('E', 'E4')) {
-      ctree = this.E4();
-      return ctree ? { 'E4': ctree } : false;
+    if (ctree = this.S5()) {
+      this.res.push(ctree)
+    } else {
+      this.getNext();
+    }
+    // while (ctree = this.F4()) {  // ! F4就是函数块
+    //   if (ctree === 'epsilon') break;
+    //   this.res.push(ctree)
+    // }
+    if (ctree = this.F4()) {
+      this.res.push(ctree);
+    }
+    return this.res;
+  }
+  backPos(prevPos, prevIndex) {  // 为了在布尔表达式中修改pos值，同时不影响或的结果
+    this.pos = prevPos;
+    this.INDEX = prevIndex;
+    return false;
+  }
+  E() {  // todo 全部改为之前的那种样子
+    let prevP = this.pos;
+    let prevI = this.INDEX;
+    let ctree = null;
+    if (this.isCurInFirst('E', 'E4')
+      && ((ctree = this.E4()) || this.backPos(prevP, prevI))) {
+      return { 'E4': ctree };
+    } else if (this.isCurInFirst('E', 'E3')
+      && ((ctree = this.E3()) || this.backPos(prevP, prevI))) {
+      return { 'E3': ctree };
+    } else if (this.isCurInFirst('E', 'E2')
+      && ((ctree = this.E2()) || this.backPos(prevP, prevI))) {
+      return { 'E2': ctree };
+    } else if (this.isCurInFirst('E', 'E1')
+      && ((ctree = this.E1()) || this.backPos(prevP, prevI))) {
+      return { 'E1': ctree };
     } else {
       return false;
     }
@@ -876,27 +930,31 @@ class ParseSample {
     }
   }
   I1() {
+    let prevP = this.pos;
+    let prevI = this.INDEX;
     let ctree = null;
     if (this.isMatch('(')) {
       ctree = this.E1();
       return (ctree && this.isMatch(')'))
         ? { '(': '(', 'E1': ctree, ')': ')' }
         : false;
-    } else if (this.isCurInFirst('I1', 'C')) {
-      ctree = this.C();
-      return ctree ? { 'C': ctree } : false;
-    } else if (this.isCurInFirst('I1', 'V')) {
-      ctree = this.C();
-      return ctree ? { 'V': ctree } : false;
-    } else if (this.isCurInFirst('I1', 'F')) {
-      ctree = this.F();
-      return ctree ? { 'F': ctree } : false;
+    } else if (this.isCurInFirst('I1', 'C')
+      && ((ctree = this.C()) || this.backPos(prevP, prevI))) {
+      return { 'C': ctree };
+    } else if (this.isCurInFirst('I1', 'F')
+      && ((ctree = this.F()) || this.backPos(prevP, prevI))) {
+      return { 'F': ctree };
+    } else if (this.isCurInFirst('I1', 'V')
+      && ((ctree = this.V()) || this.backPos(prevP, prevI))) {
+      return { 'V': ctree };
     } else {
       return this.error('期待为（或CVF对应的非终结符');
     }
   }
   C() {
-    if (this.isMatch('typenum')) {
+    if (this.isMatch('typeint')) {   // 整数
+      return 'typeint';
+    } else if (this.isMatch('typenum')) {   // 实数
       return 'typenum';
     } else if (this.isMatch('typechar')) {
       return 'typechar';
@@ -1008,13 +1066,15 @@ class ParseSample {
     }
   }
   I3() {
+    let prevP = this.pos;
+    let prevI = this.INDEX;
     let ctree = null;
-    if (this.isCurInFirst('I3', 'E1')) {
-      ctree = this.E1();
-      return ctree ? { 'E1': ctree } : false;
-    } else if (this.isCurInFirst('I3', 'E1')) {
-      ctree = this.E2();
-      return ctree ? { 'E1': ctree } : false;
+    if (this.isCurInFirst('I3', 'E1')
+      && ((ctree = this.E1()) || this.backPos(prevP, prevI))) {
+      return { 'E1': ctree };
+    } else if (this.isCurInFirst('I3', 'E2')
+      && ((ctree = this.E2()) || this.backPos(prevP, prevI))) {
+      return { 'E2': ctree };
     } else if (this.isMatch('!')) {
       ctree = this.E3();
       return ctree ? { '!': '!', 'E3': ctree } : false;
@@ -1023,20 +1083,22 @@ class ParseSample {
     }
   }
   E4() {
+    let prevP = this.pos;
+    let prevI = this.INDEX;
     let ctree1 = null;
     let ctree2 = null;
-    if (this.isCurInFirst('E4', "VE4'")) {
-      ctree1 = this.V();
+    if (this.isCurInFirst('E4', "VE4'")
+      && ((ctree1 = this.V()) || this.backPos(prevP, prevI))) {
       ctree2 = this.E4_();
-      return (ctree1 && ctree2) ? { 'V': ctree1, "E4'": ctree2 } : false;
-    } else if (this.isCurInFirst('E4', "RE4''")) {
-      ctree1 = this.R();
+      return ctree2 ? { 'V': ctree1, "E4'": ctree2 } : false;
+    } else if (this.isCurInFirst('E4', "RE4''")
+      && ((ctree1 = this.R()) || this.backPos(prevP, prevI))) {
       ctree2 = this.E4__();
-      return (ctree1 && ctree2) ? { 'R': ctree1, "E4''": ctree2 } : false;
-    } else if (this.isCurInFirst('E4', "E4''R")) {
-      ctree1 = this.E4__();
+      return ctree2 ? { 'R': ctree1, "E4''": ctree2 } : false;
+    } else if (this.isCurInFirst('E4', "E4''R")
+      && ((ctree1 = this.E4__()) || this.backPos(prevP, prevI))) {
       ctree2 = this.R();
-      return (ctree1 && ctree2) ? { "E4''": ctree1, 'R': ctree2 } : false;
+      return ctree2 ? { "E4''": ctree1, 'R': ctree2 } : false;
     } else {
       return false;
     }
@@ -1066,13 +1128,15 @@ class ParseSample {
     }
   }
   R() {
+    let prevP = this.pos;
+    let prevI = this.INDEX;
     let ctree = null;
-    if (this.isCurInFirst('R', 'V')) {
-      ctree = this.V();
-      return ctree ? { 'V': ctree } : false;
-    } else if (this.isCurInFirst('R', 'F')) {
-      ctree = this.F();
-      return ctree ? { 'F': ctree } : false;
+    if (this.isCurInFirst('R', 'V')
+      && ((ctree = this.V()) || this.backPos(prevP, prevI))) {
+      return { 'V': ctree };
+    } else if (this.isCurInFirst('R', 'F')
+      && ((ctree = this.F()) || this.backPos(prevP, prevI))) {
+      return { 'F': ctree };
     } else {
       return false;
     }
@@ -1089,25 +1153,29 @@ class ParseSample {
     }
   }
   S() {
+    let prevP = this.pos;
+    let prevI = this.INDEX;
     let ctree = null;
-    if (this.isCurInFirst('S', 'S1')) {
-      ctree = this.S1();
-      return ctree ? { 'S1': ctree } : false;
-    } else if (this.isCurInFirst('S', 'S2')) {
-      ctree = this.S2();
-      return ctree ? { 'S2': ctree } : false;
+    if (this.isCurInFirst('S', 'S1')
+      && ((ctree = this.S1()) || this.backPos(prevP, prevI))) {
+      return { 'S1': ctree };
+    } else if (this.isCurInFirst('S', 'S2')
+      && ((ctree = this.S2()) || this.backPos(prevP, prevI))) {
+      return { 'S2': ctree };
     } else {
       return false;
     }
   }
   S1() {
+    let prevP = this.pos;
+    let prevI = this.INDEX;
     let ctree = null;
-    if (this.isCurInFirst('S1', 'U')) {
-      ctree = this.U();
-      return ctree ? { 'U': ctree } : false;
-    } else if (this.isCurInFirst('S1', 'F1')) {
-      ctree = this.F1();
-      return ctree ? { 'F1': ctree } : false;
+    if (this.isCurInFirst('S1', 'U')
+      && ((ctree = this.U()) || this.backPos(prevP, prevI))) {
+      return { 'U': ctree };
+    } else if (this.isCurInFirst('S1', 'F1')
+      && ((ctree = this.F1()) || this.backPos(prevP, prevI))) {
+      return { 'F1': ctree };
     } else if (this.isCurInFollow('S1')) {
       return 'epsilon';
     } else {
@@ -1115,13 +1183,15 @@ class ParseSample {
     }
   }
   U() {
+    let prevP = this.pos;
+    let prevI = this.INDEX;
     let ctree = null;
-    if (this.isCurInFirst('U', 'C1')) {
-      ctree = this.C1();
-      return ctree ? { 'C1': ctree } : false;
-    } else if (this.isCurInFirst('U', 'V1')) {
-      ctree = this.V1();
-      return ctree ? { 'V1': ctree } : false;
+    if (this.isCurInFirst('U', 'C1')
+      && ((ctree = this.C1()) || this.backPos(prevP, prevI))) {
+      return { 'C1': ctree };
+    } else if (this.isCurInFirst('U', 'V1')
+      && ((ctree = this.V1()) || this.backPos(prevP, prevI))) {
+      return { 'V1': ctree };
     } else {
       return false;
     }
@@ -1283,27 +1353,32 @@ class ParseSample {
     }
   }
   S2() {
+    let prevP = this.pos;
+    let prevI = this.INDEX;
     let ctree = null;
-    if (this.isCurInFirst('S2', 'S3')) {
-      ctree = this.S3();
-      return ctree ? { 'S3': ctree } : false;
-    } else if (this.isCurInFirst('S2', 'S4')) {
-      ctree = this.S4();
-      return ctree ? { 'S4': ctree } : false;
-    } else if (this.isCurInFirst('S2', 'S5')) {
-      ctree = this.S5();
-      return ctree ? { 'S5': ctree } : false;
+    if (this.isCurInFirst('S2', 'S3')
+      && ((ctree = this.S3()) || this.backPos(prevP, prevI))) {
+      return { 'S3': ctree };
+    } else if (this.isCurInFirst('S2', 'S4')
+      && ((ctree = this.S4()) || this.backPos(prevP, prevI))) {
+      return { 'S4': ctree };
+    } else if (this.isCurInFirst('S2', 'S5')
+      && ((ctree = this.S5()) || this.backPos(prevP, prevI))) {
+      return { 'S5': ctree };
     } else {
       return false;
     }
   }
   S3() {
-    if (this.isCurInFirst('S3', 'S6')) {
-      ctree = this.S6();
-      return ctree ? { 'S6': ctree } : false;
-    } else if (this.isCurInFirst('S3', 'S7')) {
-      ctree = this.S7();
-      return ctree ? { 'S7': ctree } : false;
+    let prevP = this.pos;
+    let prevI = this.INDEX;
+    let ctree = null;
+    if (this.isCurInFirst('S3', 'S6')
+      && ((ctree = this.S6()) || this.backPos(prevP, prevI))) {
+      return { 'S6': ctree };
+    } else if (this.isCurInFirst('S3', 'S7')
+      && ((ctree = this.S7()) || this.backPos(prevP, prevI))) {
+      return { 'S7': ctree };
     } else {
       return false;
     }
@@ -1325,22 +1400,24 @@ class ParseSample {
     }
   }
   S4() {
+    let prevP = this.pos;
+    let prevI = this.INDEX;
     let ctree = null;
-    if (this.isCurInFirst('S4', 'X1')) {
-      ctree = this.X1();
-      return ctree ? { 'X1': ctree } : false;
-    } else if (this.isCurInFirst('S4', 'X2')) {
-      ctree = this.X2();
-      return ctree ? { 'X2': ctree } : false;
-    } else if (this.isCurInFirst('S4', 'X3')) {
-      ctree = this.X3();
-      return ctree ? { 'X3': ctree } : false;
-    } else if (this.isCurInFirst('S4', 'X4')) {
-      ctree = this.X4();
-      return ctree ? { 'X4': ctree } : false;
-    } else if (this.isCurInFirst('S4', 'X5')) {
-      ctree = this.X5();
-      return ctree ? { 'X5': ctree } : false;
+    if (this.isCurInFirst('S4', 'X1')
+      && ((ctree = this.X1()) || this.backPos(prevP, prevI))) {
+      return { 'X1': ctree };
+    } else if (this.isCurInFirst('S4', 'X2')
+      && ((ctree = this.X2()) || this.backPos(prevP, prevI))) {
+      return { 'X2': ctree };
+    } else if (this.isCurInFirst('S4', 'X3')
+      && ((ctree = this.X3()) || this.backPos(prevP, prevI))) {
+      return { 'X3': ctree };
+    } else if (this.isCurInFirst('S4', 'X4')
+      && ((ctree = this.X4()) || this.backPos(prevP, prevI))) {
+      return { 'X4': ctree };
+    } else if (this.isCurInFirst('S4', 'X5')
+      && ((ctree = this.X5()) || this.backPos(prevP, prevI))) {
+      return { 'X5': ctree };
     } else {
       return false;
     }
@@ -1384,6 +1461,8 @@ class ParseSample {
       && (ctree2 = this.S())
       && (ctree3 = this.X1_())) {
       return { 'if': 'if', '(': '(', 'E': ctree1, ')': ')', 'S': ctree2, "X1'": ctree3 };
+    } else {
+      return this.error('期待为X1')
     }
   }
   X1_() {
@@ -1468,16 +1547,18 @@ class ParseSample {
     }
   }
   P() {
+    let prevP = this.pos;
+    let prevI = this.INDEX;
     let ctree = null;
-    if (this.isCurInFirst('P', 'S1')) {
-      ctree = this.S1();
-      return ctree ? { 'S1': ctree } : false;
-    } else if (this.isCurInFirst('P', 'P2')) {
-      ctree = this.P2();
-      return ctree ? { 'P2': ctree } : false;
-    } else if (this.isCurInFirst('P', 'P1')) {
-      ctree = this.P1();
-      return ctree ? { 'P1': ctree } : false;
+    if (this.isCurInFirst('P', 'S1')
+      && ((ctree = this.S1()) || this.backPos(prevP, prevI))) {
+      return { 'S1': ctree };
+    } else if (this.isCurInFirst('P', 'P2')
+      && ((ctree = this.P2()) || this.backPos(prevP, prevI))) {
+      return { 'P2': ctree };
+    } else if (this.isCurInFirst('P', 'P1')
+      && ((ctree = this.P1()) || this.backPos(prevP, prevI))) {
+      return { 'P1': ctree };
     } else {
       return false;
     }
@@ -1511,28 +1592,30 @@ class ParseSample {
     }
   }
   P2() {
+    let prevP = this.pos;
+    let prevI = this.INDEX;
     let ctree = null;
-    if (this.isCurInFirst('P2', 'P3')) {
-      ctree = this.P3();
-      return ctree ? { 'P3': ctree } : false;
-    } else if (this.isCurInFirst('P2', 'X2')) {
-      ctree = this.X2();
-      return ctree ? { 'X2': ctree } : false;
-    } else if (this.isCurInFirst('P2', 'X3')) {
-      ctree = this.X3();
-      return ctree ? { 'X3': ctree } : false;
-    } else if (this.isCurInFirst('P2', 'X4')) {
-      ctree = this.X4();
-      return ctree ? { 'X4': ctree } : false;
-    } else if (this.isCurInFirst('P2', 'X5')) {
-      ctree = this.X5();
-      return ctree ? { 'X5': ctree } : false;
-    } else if (this.isCurInFirst('P2', 'X6')) {
-      ctree = this.X6();
-      return ctree ? { 'X6': ctree } : false;
-    } else if (this.isCurInFirst('P2', 'X7')) {
-      ctree = this.X7();
-      return ctree ? { 'X7': ctree } : false;
+    if (this.isCurInFirst('P2', 'P3')
+      && ((ctree = this.P3()) || this.backPos(prevP, prevI))) {
+      return { 'P3': ctree };
+    } else if (this.isCurInFirst('P2', 'X2')
+      && ((ctree = this.X2()) || this.backPos(prevP, prevI))) {
+      return { 'X2': ctree };
+    } else if (this.isCurInFirst('P2', 'X3')
+      && ((ctree = this.X3()) || this.backPos(prevP, prevI))) {
+      return { 'X3': ctree };
+    } else if (this.isCurInFirst('P2', 'X4')
+      && ((ctree = this.X4()) || this.backPos(prevP, prevI))) {
+      return { 'X4': ctree };
+    } else if (this.isCurInFirst('P2', 'X5')
+      && ((ctree = this.X5()) || this.backPos(prevP, prevI))) {
+      return { 'X5': ctree };
+    } else if (this.isCurInFirst('P2', 'X6')
+      && ((ctree = this.X6()) || this.backPos(prevP, prevI))) {
+      return { 'X6': ctree };
+    } else if (this.isCurInFirst('P2', 'X7')
+      && ((ctree = this.X7()) || this.backPos(prevP, prevI))) {
+      return { 'X7': ctree };
     } else {
       return false;
     }
@@ -1620,6 +1703,8 @@ class ParseSample {
         ')': ')',
         'S5': ctree3
       }
+    } else {
+      return this.error('期待为F3')
     }
   }
   L2() {
@@ -1640,7 +1725,7 @@ class ParseSample {
       && (ctree2 = this.A2_())) {
       return {
         'V2': ctree1,
-        'typeid': typeid,
+        'typeid': 'typeid',
         "A2'": ctree2
       }
     } else {
@@ -1657,7 +1742,7 @@ class ParseSample {
       return this.error('期待为A2_');
     }
   }
-  M() {
+  M() {  // ! 这个方法就是parser方法，不需要
     let ctree1 = null;
     let ctree2 = null;
     let ctree3 = null;
@@ -1667,30 +1752,51 @@ class ParseSample {
       && this.isMatch(')')
       && (ctree2 = this.S5())
       && (ctree3 = this.F4())) {
-        return {
-          'S1':ctree1,
-          'main':'main',
-          '(':'(',
-          ')':')',
-          'S5':'S5',
-          'F4':'F4'
-        }
-    }else {
+      return {
+        'S1': ctree1,
+        'main': 'main',
+        '(': '(',
+        ')': ')',
+        'S5': ctree2,
+        'F4': ctree3
+      }
+    } else {
       return this.error('期待为M');
     }
   }
   F4() {
     let ctree1 = null;
     let ctree2 = null;
-    if((ctree1 = this.F3()) && (ctree2 = this.F4())){
+    if ((ctree1 = this.F3()) && (ctree2 = this.F4())) {
       return {
         'F3': ctree1,
         'F4': ctree2
       }
-    }else if(this.isCurInFollow('F4')){
+    } else if (this.isCurInFollow('F4')) {
       return 'epsilon';
-    }else {
+    } else {
       return false;
     }
   }
 }
+// TODO 最后记得加let prevP I
+
+function flatObj(arr2) {
+  let arr1 = [];
+  Object.values(arr2).forEach((v) => {
+    arr1.push(...v);
+  })
+  return arr1;
+}
+/* 使用示范 */
+async function example3() {
+  const wr = new WordRecognition('C:/My_app/code/j3Complier/src/js/compilerCore/testCase/语法分析用例.txt');
+  let [wInfo, error, tokensArr] = await wr.start();
+  const PS = new ParseSample(tokensArr);
+  await PS.init('C:/My_app/code/j3Complier/src/js/compilerCore/SyntacticParser/Grammar/G.txt')
+  let res = PS.parser();
+  // console.log(res);
+  printTree(res);
+}
+example3();
+// 700,219,700,201,202,902

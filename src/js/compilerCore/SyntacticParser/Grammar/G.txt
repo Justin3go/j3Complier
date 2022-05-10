@@ -3,8 +3,8 @@ E1 -> I E1'
 E1' -> + E1 | - E1 | epsilon
 I -> I1 I'
 I' -> * I | / I | % I | epsilon
-I1 -> (E1) | C | V | F
-C -> typenum | typechar
+I1 -> (E1) | C | F | V
+C -> typeint | typenum | typechar
 V -> typeid
 F -> typeid(L) 
 L -> A | epsilon
