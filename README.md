@@ -60,4 +60,7 @@ async function example1() {
 }
 // example1()
 ```
-tip: 该文档还未完善，将在本学期代码完成后进一步完善文档，给个星星⭐吧，你的星星就是我持续完善的动力。
+## Tips
+- 文法在src\js\compilerCore\SyntacticParser\Grammar文件下；
+- [🔗查看文法对应命名请点击这里](https://mvt8uox695.feishu.cn/sheets/shtcnXGRYTfpCkkQ1YIW8Pd4sOe)
+- 该文档还未完善，将在本学期代码完成后进一步完善文档，给个星星⭐吧，你的星星就是我持续完善的动力。
