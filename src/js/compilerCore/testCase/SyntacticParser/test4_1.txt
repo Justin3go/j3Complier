@@ -1,0 +1,19 @@
+//for嵌套if,求1到给定数N以内所有奇数的和
+
+main(){
+
+    int N = read() ;
+    int count=0,nprime=0,i,j;
+    for(i=2;i<=N;i=i+1) {
+       nprime = 0;
+       for(j=2;j<i;j=j+1) {
+       if(i%j == 0) nprime = nprime + 1;
+       }
+       if(nprime == 0) {
+            write(i);
+            count = count + 1;
+        }
+     }
+
+}
+

@@ -1791,10 +1791,10 @@ function flatObj(arr2) {
 }
 /* 使用示范 */
 async function example3() {
-  const wr = new WordRecognition('/home/code/j3Complier/src/js/compilerCore/testCase/1.txt');
+  const wr = new WordRecognition('./src/js/compilerCore/testCase/1.txt');
   let [wInfo, error, tokensArr] = await wr.start();
   const PS = new ParseSample(tokensArr);
-  await PS.init('/home/code/j3Complier/src/js/compilerCore/SyntacticParser/Grammar/G.txt')
+  await PS.init('./src/js/compilerCore/SyntacticParser/Grammar/G.txt')
   let res = PS.parser();
   console.log(res);
   printTree(res);
