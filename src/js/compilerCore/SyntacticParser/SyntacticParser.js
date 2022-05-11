@@ -1002,11 +1002,11 @@ class ParseSample {
     }
   }
   A_() {
-    if (this.isCurInFollow("A'")) {
-      return 'epsilon';
-    } else if (this.isMatch(',')) {
+    if (this.isMatch(',')) {
       let ctree = this.A();
       return ctree ? { ',': ',', "A'": ctree } : false;
+    } else if (this.isCurInFollow("A'")) {
+      return 'epsilon';
     } else {
       return this.error('期待为,');
     }
@@ -1279,11 +1279,11 @@ class ParseSample {
     }
   }
   V4_() {
-    if (this.isCurInFollow("V4'")) {
-      return 'epsilon';
-    } else if (this.isMatch('=')) {
+    if (this.isMatch('=')) {
       let ctree = this.E();
       return ctree ? { '=': '=', 'E': ctree } : false;
+    } else if (this.isCurInFollow("V4'")) {
+      return 'epsilon';
     } else {
       return this.error('期待为=');
     }
@@ -1346,11 +1346,11 @@ class ParseSample {
     }
   }
   A1_() {
-    if (this.isCurInFollow("A1'")) {
-      return 'epsilon';
-    } else if (this.isMatch(',')) {
+    if (this.isMatch(',')) {
       let ctree = this.A1();
       return ctree ? { ',': ',', 'A1': ctree } : false;
+    } else if (this.isCurInFollow("A1'")) {
+      return 'epsilon';
     } else {
       return this.error('期待为A1_');
     }
@@ -1649,11 +1649,11 @@ class ParseSample {
     }
   }
   P3_() {
-    if (this.isCurInFollow("P3'")) {
-      return 'epsilon';
-    } else if (this.isMatch('else')) {
+    if (this.isMatch('else')) {
       let ctree = this.P();
       return ctree ? { 'else': 'else', 'P': ctree } : false;
+    } else if (this.isCurInFollow("P3'")) {
+      return 'epsilon';
     } else {
       return this.error('期待为P3_');
     }
@@ -1739,11 +1739,11 @@ class ParseSample {
     }
   }
   A2_() {
-    if (this.isCurInFollow("A2'")) {
-      return 'epsilon';
-    } else if (this.isMatch(',')) {
+    if (this.isMatch(',')) {
       let ctree = this.A2();
       return ctree ? { ',': ',', 'A2': ctree } : false;
+    } else if (this.isCurInFollow("A2'")) {
+      return 'epsilon';
     } else {
       return this.error('期待为A2_');
     }
@@ -1796,7 +1796,7 @@ function flatObj(arr2) {
 }
 /* 使用示范 */
 async function example3() {
-  const wr = new WordRecognition('./src/js/compilerCore/testCase/SyntacticParser/test6.txt');
+  const wr = new WordRecognition('./src/js/compilerCore/testCase/SyntacticParser/test12.txt');
   let [wInfo, error, tokensArr] = await wr.start();
   const PS = new ParseSample(tokensArr);
   await PS.init('./src/js/compilerCore/SyntacticParser/Grammar/G.txt')

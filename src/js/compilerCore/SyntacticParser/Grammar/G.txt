@@ -9,7 +9,7 @@ V -> typeid
 F -> typeid(L) 
 L -> A | epsilon
 A -> E A'
-A' -> epsilon | ,A
+A' ->  ,A | epsilon
 E2 -> E1 O E1
 O -> > | < | >= | <= | == | != 
 E3 -> I2 E3'
@@ -32,13 +32,13 @@ V1 -> V2 T1
 T1 -> V4 T1'
 T1' -> ; | ,T1
 V4 -> V V4'
-V4' -> epsilon | = E
+V4' -> = E | epsilon
 V2 -> int | char | float
 F1 -> F2 typeid(L1);
 F2 -> int | char | float | void
 L1 -> A1 | epsilon
 A1 -> V2 A1'
-A1' -> epsilon | ,A1
+A1' ->  ,A1 | epsilon
 S2 -> S3 | S4 | S5
 S3 -> S6 | S7
 S6 -> E4;
@@ -66,6 +66,6 @@ X7 -> continue;
 F3 -> F2 tyepid(L2) S5
 L2 -> A2 | epsilon
 A2 -> V2 typeid A2'
-A2' -> epsilon | ,A2
+A2' -> ,A2 | epsilon
 M -> S1 main() S5 F4
 F4 -> F3 F4 | epsilon
