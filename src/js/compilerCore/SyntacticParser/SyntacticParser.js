@@ -75,9 +75,9 @@ class Tool {
     this.epsilonMap = new Map();
     // 定义一些正则表达式 
     this.patternVN = /[A-Z][0-9]*\'*/g;
-    this.patternVT = /[a-z]+|(\|\|)|(>=)|(<=)|(==)|(!=)|(\&\&)|(\+=)|(-=)|(\*=)|(\/=)|(%=)|(\+\+)|(--)|[\-\*\/%\(\),\+=!;{}]/g;
+    this.patternVT = /[a-z]+|(\|\|)|(>=)|(<=)|(==)|(!=)|(\&\&)|(\+=)|(-=)|(\*=)|(\/=)|(%=)|(\+\+)|(--)|[\-\*\/%\(\),\+=!;{}<>]/g;
     // 注意这里不仅仅是上两的拼接，还加入了“|”
-    this.patternAll = /[A-Z][0-9]*\'*|[a-z]+|(\|\|)|(>=)|(<=)|(==)|(!=)|(\&\&)|(\+=)|(-=)|(\*=)|(\/=)|(%=)|(\+\+)|(--)|[\-\*\/%\(\),\+=!;{}]/g;
+    this.patternAll = /[A-Z][0-9]*\'*|[a-z]+|(\|\|)|(>=)|(<=)|(==)|(!=)|(\&\&)|(\+=)|(-=)|(\*=)|(\/=)|(%=)|(\+\+)|(--)|[\-\*\/%\(\),\+=!;{}<>]/g;
   }
   processFile() {  // 读入文件
     let _this = this;
@@ -289,12 +289,13 @@ class Tool {
 }
 /* 使用示范 */
 async function example1() {
-  const tool = new Tool('C:/My_app/code/j3Complier/src/js/compilerCore/SyntacticParser/Grammar/G.txt')
+  const tool = new Tool('C:/My_app/code/j3Complier/src/js/compilerCore/SyntacticParser/Grammar/E.txt')
   tool.init().then((v) => {
     console.log(tool.splited);
   })
 }
 // example1()
+
 // TODO 文法含有回溯，没解决，通过代码解决的E,R1,R2,E4,R3
 // TODO 还有同类非终结符需要用终结符归类
 class Expression {
@@ -1011,10 +1012,10 @@ class ParseSample {
     }
   }
   E2() {
-    let ctree1 = null;
-    let ctree2 = null;
-    let ctree3 = null;
-    if ((ctree1 = this.E1()) && (ctree2 = this.O()) && (ctree3 = this.E1())) {
+    let ctree1 = this.E1();
+    let ctree2 = this.O();
+    let ctree3 = this.E1();
+    if ((ctree1) && (ctree2) && (ctree3)) {
       return { 'E1': ctree1, 'O': ctree2, 'E1': ctree3 };
     } else {
       return false;
@@ -1061,7 +1062,7 @@ class ParseSample {
     if (this.isMatch('&&')) {
       let ctree = this.I2();
       return ctree ? { '&&': '&&', 'I2': ctree } : false;
-    } else if(this.isCurInFollow("I2'")){
+    } else if (this.isCurInFollow("I2'")) {
       return 'epsilon';
     } else {
       return this.error('期待为&&');
@@ -1468,11 +1469,11 @@ class ParseSample {
     }
   }
   X1_() {
-    if (this.isCurInFollow("X1'")) {
-      return 'epsilon';
-    } else if (this.isMatch('else')) {
+    if (this.isMatch('else')) {
       let ctree = this.S();
       return ctree ? { 'else': 'else', 'S': ctree } : false;
+    } else if (this.isCurInFollow("X1'")) {
+      return 'epsilon';
     } else {
       return this.error('期待为X1_');
     }
@@ -1561,6 +1562,9 @@ class ParseSample {
     } else if (this.isCurInFirst('P', 'P1')
       && ((ctree = this.P1()) || this.backPos(prevP, prevI))) {
       return { 'P1': ctree };
+    } else if (this.isCurInFirst('P', 'S5')  // TODO 这里直接加了S5,粒度可能太高了
+      && ((ctree = this.S5()) || this.backPos(prevP, prevI))) {
+      return { 'S5': ctree }
     } else {
       return false;
     }
@@ -1782,6 +1786,7 @@ class ParseSample {
   }
 }
 
+// TODO epsilon怎么可能在最前面，有些文法可能还需要修改，目前修改了几个会影响结果的，其他的先搁置
 function flatObj(arr2) {
   let arr1 = [];
   Object.values(arr2).forEach((v) => {
@@ -1791,7 +1796,7 @@ function flatObj(arr2) {
 }
 /* 使用示范 */
 async function example3() {
-  const wr = new WordRecognition('./src/js/compilerCore/testCase/1.txt');
+  const wr = new WordRecognition('./src/js/compilerCore/testCase/SyntacticParser/test6.txt');
   let [wInfo, error, tokensArr] = await wr.start();
   const PS = new ParseSample(tokensArr);
   await PS.init('./src/js/compilerCore/SyntacticParser/Grammar/G.txt')
@@ -1800,4 +1805,3 @@ async function example3() {
   printTree(res);
 }
 example3();
-// 700,219,700,201,202,902

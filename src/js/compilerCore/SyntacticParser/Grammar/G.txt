@@ -48,17 +48,17 @@ S5 -> { T3 }
 T3 -> S T3'
 T3' -> epsilon | T3
 X1 -> if(E)S X1'
-X1' -> epsilon | else S
+X1' -> else S | epsilon
 X2 -> for(E;E;E)P
 X3 -> while(E)P
 X4 -> do P1 while(E);
-P -> S1 | P2 | P1
+P -> S1 | P2 | P1 | S5
 P1 -> { T4 }
 T4 -> P T4'
 T4' -> epsilon | T4
 P2 -> P3 | X2 | X3 | X4 | X5 | X6 | X7
 P3 -> if(E)P P3'
-P3' -> epsilon | else P
+P3' -> else P | epsilon 
 X5 -> return X5'
 X5'-> ; | E;
 X6 -> break;

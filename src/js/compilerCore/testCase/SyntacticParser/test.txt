@@ -1,0 +1,7 @@
+  if(n<1)
+  {
+    factor=0;
+  }
+  else {
+    factor=1;
+  }
