@@ -1779,7 +1779,6 @@ class ParseSample {
     }
   }
 }
-// TODO 最后记得加let prevP I
 
 function flatObj(arr2) {
   let arr1 = [];
