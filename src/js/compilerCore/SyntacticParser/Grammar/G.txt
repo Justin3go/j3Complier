@@ -16,7 +16,7 @@ E3 -> I2 E3'
 E3' -> || E3 | epsilon
 I2 -> I3 I2'
 I2' -> && I2 | epsilon
-I3 -> E1 | E2 | ! E3
+I3 -> E2 | E1 | ! E3
 E4 -> V E4' | R E4'' | E4'' R
 E4' -> = E | += E | -= E | *= E | /= E | %= E 
 R -> V | F
