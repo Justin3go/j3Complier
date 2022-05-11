@@ -1061,6 +1061,8 @@ class ParseSample {
     if (this.isMatch('&&')) {
       let ctree = this.I2();
       return ctree ? { '&&': '&&', 'I2': ctree } : false;
+    } else if(this.isCurInFollow("I2'")){
+      return 'epsilon';
     } else {
       return this.error('期待为&&');
     }
@@ -1069,12 +1071,12 @@ class ParseSample {
     let prevP = this.pos;
     let prevI = this.INDEX;
     let ctree = null;
-    if (this.isCurInFirst('I3', 'E1')
-      && ((ctree = this.E1()) || this.backPos(prevP, prevI))) {
-      return { 'E1': ctree };
-    } else if (this.isCurInFirst('I3', 'E2')
+    if (this.isCurInFirst('I3', 'E2')
       && ((ctree = this.E2()) || this.backPos(prevP, prevI))) {
       return { 'E2': ctree };
+    } else if (this.isCurInFirst('I3', 'E1')
+      && ((ctree = this.E1()) || this.backPos(prevP, prevI))) {
+      return { 'E1': ctree };
     } else if (this.isMatch('!')) {
       ctree = this.E3();
       return ctree ? { '!': '!', 'E3': ctree } : false;
@@ -1233,7 +1235,7 @@ class ParseSample {
       return ';';
     } else if (this.isMatch(',')) {
       let ctree = this.T();
-      return ctree ? { ';': ';', 'T': ctree } : false;
+      return ctree ? { ',': ',', 'T': ctree } : false;
     } else {
       return this.error('期待为;,');
     }
@@ -1538,7 +1540,7 @@ class ParseSample {
         'P1': ctree1,
         'while': 'while',
         '(': '(',
-        'E': 'E',
+        'E': ctree2,
         ')': ')',
         ';': ';'
       };
@@ -1790,12 +1792,12 @@ function flatObj(arr2) {
 }
 /* 使用示范 */
 async function example3() {
-  const wr = new WordRecognition('C:/My_app/code/j3Complier/src/js/compilerCore/testCase/语法分析用例.txt');
+  const wr = new WordRecognition('/home/code/j3Complier/src/js/compilerCore/testCase/1.txt');
   let [wInfo, error, tokensArr] = await wr.start();
   const PS = new ParseSample(tokensArr);
-  await PS.init('C:/My_app/code/j3Complier/src/js/compilerCore/SyntacticParser/Grammar/G.txt')
+  await PS.init('/home/code/j3Complier/src/js/compilerCore/SyntacticParser/Grammar/G.txt')
   let res = PS.parser();
-  // console.log(res);
+  console.log(res);
   printTree(res);
 }
 example3();

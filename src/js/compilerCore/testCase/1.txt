@@ -10,12 +10,12 @@ main()
 }
 
 int comp(int n,int i) {
-int a,b; 
-if(n == i || i == 0)
-	{
-		return 1;
-	}
-	 a = comp(n-1,i);
-	 b = comp(n-1,i-1);
-	return a + b; 
+  int a,b; 
+  if(n == i || i == 0)
+  {
+    return 1;
+  }
+  a = comp(n-1,i);
+  b = comp(n-1,i-1);
+  return a + b; 
 }
