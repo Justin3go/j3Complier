@@ -292,6 +292,7 @@ async function example1() {
   const tool = new Tool('C:/My_app/code/j3Complier/src/js/compilerCore/SyntacticParser/Grammar/E.txt')
   tool.init().then((v) => {
     console.log(tool.splited);
+    // 或follow集，first集等
   })
 }
 // example1()
