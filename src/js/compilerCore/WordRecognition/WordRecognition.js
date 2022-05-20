@@ -554,12 +554,12 @@ class WordRecognition {
     console.log('日志信息：', info);
     console.log('错误情况：', this.errorPos);
     console.log('最终结果：', res);
-    return [info, this.errorPos, this.transTokens(res)];
+    return [info, this.errorPos, this.transTokens(res), res];
   };
 }
 
-// const wr = new WordRecognition('C:/My_app/code/j3Complier/src/js/compilerCore/testCase/test.txt');
-// wr.start()
+const wr = new WordRecognition('C:/My_app/code/j3Complier/src/js/compilerCore/testCase/test.txt');
+wr.start()
 // wr.processFile()
 
 exports.WordRecognition = WordRecognition;

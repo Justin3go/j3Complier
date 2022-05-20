@@ -239,7 +239,7 @@ async function example1() {
 // example1()
 
 class MidCodeGenerator {
-  constructor(tokens) {
+  constructor(tokens, srcWord) {
     this.tokens = tokens;
     this.pos = 0;
     this.lines = Object.keys(tokens);
@@ -278,6 +278,17 @@ class MidCodeGenerator {
     }
     this.tool = null;
     this.res = [];
+    // * 中间代码生成相关
+    this.srcWord = srcWord;  // 符号表需要对应真实的名字
+    this.NXQ_ = 0;  // 指向即将自动生成的四元式编号
+    this.tempVar = {};  // 临时变量的存储位置
+    this.midCode = {};
+    this.CONST_TABLE = {};
+    this.scopeCount = 0;   // todo 作用域编号，每发现(进入)一个新的作用域，编号要加一，而退出作用域和下面不一样，不需要减一
+    this.scopePath = [0];  // todo 进入和退出需要压栈和出栈
+    this.VAR_TABLE = {};
+    this.FUN_TABLE = {};
+    this.STR_TABLE = {};   // todo delete
   }
   async init(filePath) {
     console.log('-----------------------------语法分析相关--------------------------------');
@@ -336,9 +347,10 @@ class MidCodeGenerator {
     this.info.push([this.lines[this.INDEX], this.pos, s]);
     return false;
   }
-  backPos(prevPos, prevIndex) { 
+  backPos(prevPos, prevIndex, nxq) {
     this.pos = prevPos;
     this.INDEX = prevIndex;
+    if (nxq !== undefined) this.deleteAfterNXQ(nxq);  // ! 在中间代码生成中，还要删除试探生成的中间代码
     return false;
   }
   parser() {
@@ -346,19 +358,17 @@ class MidCodeGenerator {
       let ctree = null;
       if (ctree = this.S1()) {
         if (ctree === 'epsilon') break;
-        this.res.push(ctree);
       } else {
         this.getNext(); // 尝试下一个字符
       }
     }
     if (this.isMatch('(') && this.isMatch(')')) {
-      this.res.push('main()')
+      this.genCode('main', undefined, undefined, undefined);
     } else {
       this.error('main()无法识别');
     }
-    let ctree = null;
-    if (ctree = this.S5()) {
-      this.res.push(ctree)
+    if (this.S5()) {
+      this.genCode('sys', undefined, undefined, undefined);
     } else {
       this.getNext();
     }
@@ -366,176 +376,342 @@ class MidCodeGenerator {
     //   if (ctree === 'epsilon') break;
     //   this.res.push(ctree)
     // }
-    if (ctree = this.F4()) {
-      this.res.push(ctree);
-    }
-    return this.res;
+    this.F4();
+    return this.midCode;
   }
   /** 中间代码生成所新增函数 */
+  NXQ() {  // 自动加一
+    return this.NXQ_++;
+  }
+  genCode(op, arg1, arg2, result) {
+    this.midCode[this.NXQ()] = [op, arg1, arg2, result];
+    return true;
+  }
+  newTemp(X) {  // X为文法符号
+    if (!(X in this.tempVar)) {
+      this.tempVar[X] = [];
+    }
+    let len = this.tempVar[X].length;
+    this.tempVar[X][len] = undefined;  // 初始化可以占据数组长度
+    return X + '$' + len;  // ! 返回如E$0,E$1,每次调用往后增加
+  }
 
-
+  getRealTempPos(nt) {
+    let [X, pos] = nt.split('$');
+    return [X, pos];
+  }
+  getCurTempPosStr(X) {   // ! 不用每次都传来传去，每次都是使用最新的就可以了，因为都是刚刚申请的变量
+    let len = this.tempVar[X].length;
+    return X + '$' + (len - 1);
+  }
+  merge(P1, P2) { // 合并两个四元式链，返回链首(P2 != 0, 否则会形成环)
+    if (P2 == 0) return P1;
+    else {
+      let P = P2;
+      while (this.midCode[P][3] != 0) {
+        P = this.midCode[P][3];
+      }
+      this.midCode[P][3] = P1;  // P1在前，P2在后
+      return P2;
+    }
+  }
+  backPatch(P, t) {  // 将链首所连接的每个四元式的第四个分量都改写为t
+    let Q = P;
+    while (Q != 0) {
+      let m = this.midCode[Q][3];
+      this.midCode[Q][3] = t;
+      Q = m;
+    }
+    return true;
+  }
+  // ! 注意每次使用需要在isMatch之前使用，否则获取的就是下一个字符了，因为isMatch会移动指针
+  getSrcWord() {  // 返回当前真实的名字，而不是像typeid这样的类型
+    let line = this.lines[this.INDEX];
+    if (line === undefined) return undefined;
+    let curWord = this.srcWord[line][this.pos][1];
+    return curWord;
+  }
+  // 下面这三个函数处理作用域相关
+  inScope() {
+    let count = ++this.scopeCount;
+    this.scopePath.push(count);
+    return true;
+  }
+  outScope() {
+    this.scopePath.pop();
+    return true;
+  }
+  getScopePath() {
+    return this.scopePath.join('/');
+  }
+  // todo 后续可能要单独检查不同符号表中是否有相同的名字，这应该也是不允许的，需要报错
+  getVarEntry(word) {  // 检查是否已经声明，同时返回对应指针，在我的代码中返回的是对应键值
+    if (word in this.FUN_TABLE) this.error(`函数声明${word}不能这样使用`);
+    else if (word in this.CONST_TABLE) this.error(`不能修改常量${word}`);
+    else if (!(word in this.VAR_TABLE)) this.error(`变量${word}未声明`);
+    else if (word in this.VAR_TABLE) {
+      return ['vartable', word, this.getScopePath()];  // ! 这是正确返回，第一个为表名
+    } else return undefined;  // ! 统一错误返回
+  }
+  getEntry(word) {  // 可以是常量，也可以是变量，因为能使用常量的地方一定能使用变量，但能使用变量的地方不一定能使用常量
+    if (word in this.FUN_TABLE) this.error(`函数声明${word}不能这样使用`);
+    else if (!(word in this.CONST_TABLE) && !(word in this.VAR_TABLE)) {
+      this.error(`${word}未声明就使用`);
+    }
+    if (word in this.CONST_TABLE) {
+      return ['consttable', word];
+    } else if (word in this.VAR_TABLE) {
+      return ['vartable', word, this.getScopePath()];
+    }
+    return undefined;  // ! 统一错误返回
+  }
+  getFunEntry(word) {
+    if (!(word in this.FUN_TABLE)) {
+      this.error(`函数${word}未声明就使用`);
+      return undefined;
+    } else {
+      return ['funtable', word];
+    }
+  }
   /** 递归下降法文法对应函数 */
-  E() {
+  // * 表达式
+  // ! 调用了某个函数时，就可以使用该函数的临时变量对当前函数的临时变量进行赋值
+  // ! E_函数里属于E，在其中对临时变量进行操作就是对this.tempVar.E进行操作
+  // ! 为了方便，直接使用文法符号本身+$+数字代替其.PLACE，其他的语义变量则不变，以小写形式加在其后面
+  assignTemp(X1, X2) {  // X1 = X2 // * 都是对应最新的进行赋值
+    let X1place = this.tempVar[X1];
+    let X2place = this.tempVar[X2];
+    X1place[X1place.length - 1] = X2place[X2place.length - 1];
+  }
+  assignOther(X, something) {  // * 对最新一个进行赋值
+    let Xplace = this.tempVar[X];
+    Xplace[Xplace.length - 1] = something;
+  }
+  deleteAfterNXQ(nxq) {   // 删除nxq之后的中间代码，包括nxq
+    this.NXQ_ = nxq;
+    while (nxq in this.midCode) {
+      delete this.midCode[nxq];
+      nxq++;
+    }
+    return true;
+  }
+  isE3(prevP, prevI) {
+    let curP = this.pos;
+    let curI = this.INDEX;
+    let end;
+    if (curI == prevI) end = curP;
+    else end = this.tokens[this.lines[prevI]].length - 1;
+    let line = this.tokens[this.lines[prevI]];
+    let flag = line.slice(prevP, end).some((v) => {
+      return v == '217' || v == '218';
+    })
+    return flag;
+  }
+
+  E() {  // * over
     let prevP = this.pos;
     let prevI = this.INDEX;
-    let ctree = null;
+    let prevNXQ = this.NXQ_;
+    // this.newTemp('E'); // ! 新增一个临时变量存储
     if (this.isCurInFirst('E', 'E4')
-      && ((ctree = this.E4()) || this.backPos(prevP, prevI))) {
-      return { 'E4': ctree };
+      && (this.E4() || this.backPos(prevP, prevI, prevNXQ))) {
+      // this.assignTemp('E', 'E4');  // 赋值表达式没有
+      return true;
     } else if (this.isCurInFirst('E', 'E3')
-      && ((ctree = this.E3()) || this.backPos(prevP, prevI))) {
-      return { 'E3': ctree };
+      && (this.E3() || this.backPos(prevP, prevI, prevNXQ))
+      && (this.isE3(prevP, prevI) || this.backPos(prevP, prevI, prevNXQ))) {
+      // this.assignTemp('E', 'E3');  // todo 算术表达式会走这里，并且backPos回来生成的四元式也没有删除
+      return true;
     } else if (this.isCurInFirst('E', 'E2')
-      && ((ctree = this.E2()) || this.backPos(prevP, prevI))) {
-      return { 'E2': ctree };
+      && (this.E2() || this.backPos(prevP, prevI, prevNXQ))) {
+      // this.assignTemp('E', 'E2');  // todo
+      return true;
     } else if (this.isCurInFirst('E', 'E1')
-      && ((ctree = this.E1()) || this.backPos(prevP, prevI))) {
-      return { 'E1': ctree };
+      && (this.E1() || this.backPos(prevP, prevI, prevNXQ))) {
+      this.newTemp('E');
+      this.assignTemp('E', 'E1');  // 有
+      return true;
     } else {
       return false;
     }
   }
-  E1() {
-    let ctree1 = null;
-    let ctree2 = null;
-    if ((ctree1 = this.I()) && (ctree2 = this.E1_())) {
-      return { 'I': ctree1, "E1'": ctree2 };
+  E1() {  // * over
+    if (this.I() && this.E1_()) {
+      return true;
     } else {
       return false;
     }
   }
-  E1_() {
-    let ctree = null;
-    if (this.isMatch('+')) {
-      ctree = this.E1();
-      return ctree ? { '+': '+', 'E1': ctree } : false;
-    } else if (this.isMatch('-')) {
-      ctree = this.E1();
-      return ctree ? { '-': '-', 'E1': ctree } : false;
-    } else if (this.isCurInFollow("E1'")) {  // 直接有epsilon，所以不用判断是否有
-      return 'epsilon';
+  E1_() {  // * over
+    this.newTemp('E1');  // 这里申请值
+    if (this.isMatch('+') && this.E1()) {  // 必须在使用了E1之后获取和申请
+      let nt1 = this.getCurTempPosStr('E1');
+      let nt2 = this.newTemp('E1');
+      let nt3 = this.getCurTempPosStr('I');
+      this.genCode('+', nt1, nt3, nt2);  // 结果也存在E1里面，算了，万一后面不行呢
+      return true;
+    } else if (this.isMatch('-') && this.E1()) {
+      let nt1 = this.getCurTempPosStr('E1');
+      let nt2 = this.newTemp('E1');
+      let nt3 = this.getCurTempPosStr('I');
+      this.genCode('-', nt1, nt3, nt2);
+      return true;
+    } else if (this.isCurInFollow("E1'")) {
+      this.assignTemp('E1', 'I');
+      return true;
     } else {
       return this.error('期待为+或-');
     }
   }
-  I() {
-    let ctree1 = null;
-    let ctree2 = null;
-    if ((ctree1 = this.I1()) && (ctree2 = this.I_())) {
-      return { 'I1': ctree1, "I'": ctree2 };
+  I() {  // * over
+    this.newTemp('I');
+    if (this.I1() && this.I_()) {
+      return true;
     } else {
       return false;
     }
   }
-  I_() {
-    let ctree = null;
-    if (this.isMatch('*')) {
-      ctree = this.I();
-      return ctree ? { '*': '*', 'I': ctree } : false;
-    } else if (this.isMatch('/')) {
-      ctree = this.I();
-      return ctree ? { '/': '/', 'I': ctree } : false;
-    } else if (this.isMatch('%')) {
-      ctree = this.I();
-      return ctree ? { '%': '%', 'I': ctree } : false;
+  I_() {  // * over
+    if (this.isMatch('*') && this.I()) {
+      let nt1 = this.getCurTempPosStr('I');
+      let nt2 = this.newTemp('I');
+      let nt3 = this.getCurTempPosStr('I1');
+      this.genCode('*', nt1, nt3, nt2);  // 结果也存在I中
+      return true;
+    } else if (this.isMatch('/') && this.I()) {
+      let nt1 = this.getCurTempPosStr('I');
+      let nt2 = this.newTemp('I');
+      let nt3 = this.getCurTempPosStr('I1');
+      this.genCode('/', nt1, nt3, nt2);
+      return true;
+    } else if (this.isMatch('%') && this.I()) {
+      let nt1 = this.getCurTempPosStr('I');
+      let nt2 = this.newTemp('I');
+      let nt3 = this.getCurTempPosStr('I1');
+      this.genCode('%', nt1, nt3, nt2);
+      return true;
     } else if (this.isCurInFollow("I'")) {
-      return 'epsilon';
+      this.assignTemp('I', 'I1');
+      return true;
     } else {
       return this.error('期待为*/%');
     }
   }
-  I1() {
+  I1() {  // todo 如果要做自减需要改这里,不知道函数调用该返回什么
     let prevP = this.pos;
     let prevI = this.INDEX;
-    let ctree = null;
-    if (this.isMatch('(')) {
-      ctree = this.E1();
-      return (ctree && this.isMatch(')'))
-        ? { '(': '(', 'E1': ctree, ')': ')' }
-        : false;
+    let prevNXQ = this.NXQ_;
+    this.newTemp('I1');
+    let word;
+    let nt;
+    if (this.isMatch('(') && this.E1() && this.isMatch(')')) {
+      this.assignTemp('I1', 'E1');
+      return true;
     } else if (this.isCurInFirst('I1', 'C')
-      && ((ctree = this.C()) || this.backPos(prevP, prevI))) {
-      return { 'C': ctree };
+      && ((word = this.C()) || this.backPos(prevP, prevI, prevNXQ))) {
+      this.assignOther('I1', word);
+      return true;
     } else if (this.isCurInFirst('I1', 'F')
-      && ((ctree = this.F()) || this.backPos(prevP, prevI))) {
-      return { 'F': ctree };
+      && ((nt = this.F()) || this.backPos(prevP, prevI, prevNXQ))) {
+      this.assignOther('I1', nt);
+      return true;
     } else if (this.isCurInFirst('I1', 'V')
-      && ((ctree = this.V()) || this.backPos(prevP, prevI))) {
-      return { 'V': ctree };
+      && ((word = this.V()) || this.backPos(prevP, prevI, prevNXQ))) {
+      let entry = this.getVarEntry(word);
+      this.assignOther('I1', entry);
+      return true;
     } else {
       return this.error('期待为（或CVF对应的非终结符');
     }
   }
-  C() {
+  C() {  // * over
+    let word = this.getSrcWord();
     if (this.isMatch('typeint')) {   // 整数
-      return 'typeint';
+      return word;
     } else if (this.isMatch('typenum')) {   // 实数
-      return 'typenum';
+      return word;
     } else if (this.isMatch('typechar')) {
-      return 'typechar';
+      return word;
     } else {
       return this.error('期待为数字型常量或字符型常量');
     }
   }
-  V() {
+  V() {  // * over
+    let word = this.getSrcWord();
     if (this.isMatch('typeid')) {
-      return 'typeid';
+      return word;
     } else {
       return this.error('期待为标识符');
     }
   }
+
+  // * 函数调用
   F() {
+    let word = this.getSrcWord();
+    let nt = this.newTemp('F');
     if (this.isMatch('typeid')) {
-      let ctree = null;
-      return (this.isMatch('(')
-        && (ctree = this.L())
-        && this.isMatch(')'))
-        ? { 'typeid': 'typeid', '(': '(', 'L': ctree, ')': ')' }
-        : false;
+      let f1 = this.isMatch('(');
+      let f2 = this.L();
+      let f3 = this.isMatch(')');
+      this.genCode('call', word, undefined, nt);
+      return (f1 && f2 && f3) ? nt : false;
     } else {
       return this.error('期待为标识符');
     }
   }
   L() {
-    let ctree = this.A();
-    if (ctree) {
-      return { 'A': ctree };
+    let f = this.A();
+    if (f) {
+      return true;
     } else if (this.isCurInFollow('L')) {
-      return 'epsilon';
+      return true;
     } else {
       return false;
     }
   }
   A() {
-    let ctree1 = null;
-    let ctree2 = null;
-    if ((ctree1 = this.E()) && (ctree2 = this.A_())) {
-      return { 'E': ctree1, "A'": ctree2 };
+    if (this.E()
+      && this.genCode('para', this.getCurTempPosStr('E'), undefined, undefined)
+      && this.A_()) {
+      return true;
     } else {
       return false;
     }
   }
   A_() {
     if (this.isMatch(',')) {
-      let ctree = this.A();
-      return ctree ? { ',': ',', "A'": ctree } : false;
+      let f = this.A();
+      return f;
     } else if (this.isCurInFollow("A'")) {
-      return 'epsilon';
+      return true;
     } else {
       return this.error('期待为,');
     }
   }
-  E2() {
-    let ctree1 = this.E1();
-    let ctree2 = this.O();
-    let ctree3 = this.E1();
-    if ((ctree1) && (ctree2) && (ctree3)) {
-      return { 'E1': ctree1, 'O': ctree2, 'E1': ctree3 };
+
+
+  E2() {  // * o
+    let f1 = this.E1();
+    let place1 = this.getCurTempPosStr('E1');
+
+    let rop = this.O();
+
+    let f2 = this.E1();
+    let place2 = this.getCurTempPosStr('E1');
+
+    if (f1 && rop && f2) {
+      this.tempVar.I3tc = this.NXQ_;  // ! 除place外的其他语义变量是这样命名的
+      this.tempVar.I3fc = this.NXQ_ + 1;
+      this.tempVar.E2tc = this.NXQ_;
+      this.tempVar.E2fc = this.NXQ_ + 1;
+      this.genCode('j' + rop, place1, place2, 0);
+      this.genCode('j', undefined, undefined, 0);
+      return true;
     } else {
       return false;
     }
   }
-  O() {
+  O() {  // * o
     if (this.isMatch('>')) return '>';
     else if (this.isMatch('<')) return '<';
     else if (this.isMatch('>=')) return '>=';
@@ -547,17 +723,21 @@ class MidCodeGenerator {
     }
   }
   E3() {
-    let ctree1 = null, ctree2 = null;
-    if ((ctree1 = this.I2()) && (ctree2 = this.E3_())) {
-      return { 'I2': ctree1, "E3'": ctree2 };
+    if (this.I2() && this.E3_()) {
+      return true;
     } else {
       return false;
     }
   }
   E3_() {
     if (this.isMatch('||')) {
-      let ctree = this.E3();
-      return ctree ? { '||': '||', 'E3': ctree } : false;
+      this.tempVar.E3fc = this.tempVar.I2fc;
+      this.tempVar.E3tc = this.tempVar.I2tc;
+      this.backPatch(this.tempVar.E3fc, this.NXQ_);
+      let f = this.E3();
+      this.tempVar.E3fc = this.tempVar.I2fc;
+      this.tempVar.E3tc = this.tempVar.I2tc;
+      return f;
     } else if (this.isCurInFollow("E3'")) {
       return 'epsilon';
     } else {
@@ -565,119 +745,80 @@ class MidCodeGenerator {
     }
   }
   I2() {
-    let ctree1 = null, ctree2 = null;
-    if ((ctree1 = this.I3()) && (ctree2 = this.I2_())) {
-      return { 'I3': ctree1, "I2'": ctree2 };
+    if (this.I3() && this.I2_()) {
+      return true;
     } else {
       return false;
     }
   }
   I2_() {
-    if (this.isMatch('&&')) {
-      let ctree = this.I2();
-      return ctree ? { '&&': '&&', 'I2': ctree } : false;
+    if (this.isMatch('&&')) {  // 每当执行到&&的时候开始回填
+      this.tempVar.I2tc = this.tempVar.I3tc;  // ! 新增
+      this.tempVar.I2fc = this.tempVar.I3fc;
+      this.backPatch(this.tempVar.I2tc, this.NXQ_)  // 是i3
+      let f = this.I2();
+      this.tempVar.I2tc = this.tempVar.I3tc;
+      this.tempVar.I2fc = this.tempVar.I3fc;
+      return f;
     } else if (this.isCurInFollow("I2'")) {
-      return 'epsilon';
+      return true;
     } else {
       return this.error('期待为&&');
     }
   }
-  I3() {
+  I3() {  // * o 
     let prevP = this.pos;
     let prevI = this.INDEX;
-    let ctree = null;
+    let prevNXQ = this.NXQ_;
     if (this.isCurInFirst('I3', 'E2')
-      && ((ctree = this.E2()) || this.backPos(prevP, prevI))) {
-      return { 'E2': ctree };
+      && (this.E2() || this.backPos(prevP, prevI, prevNXQ))) {
+      // 相关语义动作放到了E2中执行
+      this.tempVar.E3tc = this.tempVar.E2tc;
+      this.tempVar.E3fc = this.tempVar.E2fc;
+      return true;
     } else if (this.isCurInFirst('I3', 'E1')
-      && ((ctree = this.E1()) || this.backPos(prevP, prevI))) {
-      return { 'E1': ctree };
-    } else if (this.isMatch('!')) {
-      ctree = this.E3();
-      return ctree ? { '!': '!', 'E3': ctree } : false;
+      && (this.E1() || this.backPos(prevP, prevI, prevNXQ))) {
+      this.tempVar.I3tc = this.NXQ_;
+      this.tempVar.I3fc = this.NXQ_ + 1;
+      let place = this.getCurTempPosStr('E1');  // 获取入口
+      this.genCode('jnz', place, undefined, 0);
+      this.genCode('j', undefined, undefined, 0);
+      return true;
+    } else if (this.isMatch('!') && this.E3()) {
+      this.tempVar.I3tc = this.tempVar.E3fc;   // todo 说明这里需要E3里赋值真假出口的语义变量
+      this.tempVar.I3fc = this.tempVar.E3tc;
+      return true;
     } else {
       return this.error('期待为E1E2或！');
     }
   }
-  E4() {
-    let prevP = this.pos;
-    let prevI = this.INDEX;
-    let ctree1 = null;
-    let ctree2 = null;
-    if (this.isCurInFirst('E4', "VE4'")
-      && ((ctree1 = this.V()) || this.backPos(prevP, prevI))) {
-      ctree2 = this.E4_();
-      return ctree2 ? { 'V': ctree1, "E4'": ctree2 } : false;
-    } else if (this.isCurInFirst('E4', "RE4''")
-      && ((ctree1 = this.R()) || this.backPos(prevP, prevI))) {
-      ctree2 = this.E4__();
-      return ctree2 ? { 'R': ctree1, "E4''": ctree2 } : false;
-    } else if (this.isCurInFirst('E4', "E4''R")
-      && ((ctree1 = this.E4__()) || this.backPos(prevP, prevI))) {
-      ctree2 = this.R();
-      return ctree2 ? { "E4''": ctree1, 'R': ctree2 } : false;
-    } else {
-      return false;
-    }
-  }
-  E4_() {
-    // TODO 这里(这类)明显冗余了，后续需要优化
-    if (this.isMatch('=')) {
-      let ctree = this.E();
-      return ctree ? { '=': '=', 'E': ctree } : false;
-    } else if (this.isMatch('+=')) {
-      let ctree = this.E();
-      return ctree ? { '+=': '+=', 'E': ctree } : false;
-    } else if (this.isMatch('-=')) {
-      let ctree = this.E();
-      return ctree ? { '-=': '-=', 'E': ctree } : false;
-    } else if (this.isMatch('*=')) {
-      let ctree = this.E();
-      return ctree ? { '*=': '*=', 'E': ctree } : false;
-    } else if (this.isMatch('/=')) {
-      let ctree = this.E();
-      return ctree ? { '/=': '/=', 'E': ctree } : false;
-    } else if (this.isMatch('%=')) {
-      let ctree = this.E();
-      return ctree ? { '%=': '%=', 'E': ctree } : false;
-    } else {
-      return this.error('期待为=或某等');
-    }
-  }
-  R() {
-    let prevP = this.pos;
-    let prevI = this.INDEX;
-    let ctree = null;
-    if (this.isCurInFirst('R', 'V')
-      && ((ctree = this.V()) || this.backPos(prevP, prevI))) {
-      return { 'V': ctree };
-    } else if (this.isCurInFirst('R', 'F')
-      && ((ctree = this.F()) || this.backPos(prevP, prevI))) {
-      return { 'F': ctree };
-    } else {
-      return false;
-    }
-  }
-  E4__() {
-    if (this.isMatch('++')) {
-      return '++';
-    }
-    else if (this.isMatch('--')) {
-      return '--';
+  E4() {  // * over
+    if(this.INDEX == 9)debugger
+    let word = this.getSrcWord();
+    if (this.isMatch('typeid')
+      && this.isMatch('=')
+      && this.E()) {
+      let place = this.getCurTempPosStr('E');
+      let entry = this.getVarEntry(word);
+      this.genCode('=', place, undefined, entry);
+      return true;
     }
     else {
-      return this.error('期待为++或--');
+      return this.error('期待为E4');
     }
   }
+
+
   S() {
     let prevP = this.pos;
     let prevI = this.INDEX;
+    let prevNXQ = this.NXQ_;
     let ctree = null;
     if (this.isCurInFirst('S', 'S1')
-      && ((ctree = this.S1()) || this.backPos(prevP, prevI))) {
+      && ((ctree = this.S1()) || this.backPos(prevP, prevI, prevNXQ))) {
       return { 'S1': ctree };
     } else if (this.isCurInFirst('S', 'S2')
-      && ((ctree = this.S2()) || this.backPos(prevP, prevI))) {
+      && ((ctree = this.S2()) || this.backPos(prevP, prevI, prevNXQ))) {
       return { 'S2': ctree };
     } else {
       return false;
@@ -687,14 +828,15 @@ class MidCodeGenerator {
     let prevP = this.pos;
     let prevI = this.INDEX;
     let ctree = null;
+    let prevNXQ = this.NXQ_;
     if (this.isCurInFirst('S1', 'U')
-      && ((ctree = this.U()) || this.backPos(prevP, prevI))) {
+      && ((ctree = this.U()) || this.backPos(prevP, prevI, prevNXQ))) {
       return { 'U': ctree };
     } else if (this.isCurInFirst('S1', 'F1')
-      && ((ctree = this.F1()) || this.backPos(prevP, prevI))) {
+      && ((ctree = this.F1()) || this.backPos(prevP, prevI, prevNXQ))) {
       return { 'F1': ctree };
     } else if (this.isCurInFollow('S1')) {
-      return 'epsilon';
+      return 'epsilon';  // ! 这里不能改，因为主控程序要区分
     } else {
       return false;
     }
@@ -703,28 +845,45 @@ class MidCodeGenerator {
     let prevP = this.pos;
     let prevI = this.INDEX;
     let ctree = null;
+    let prevNXQ = this.NXQ_;
     if (this.isCurInFirst('U', 'C1')
-      && ((ctree = this.C1()) || this.backPos(prevP, prevI))) {
+      && ((ctree = this.C1()) || this.backPos(prevP, prevI, prevNXQ))) {
       return { 'C1': ctree };
     } else if (this.isCurInFirst('U', 'V1')
-      && ((ctree = this.V1()) || this.backPos(prevP, prevI))) {
+      && ((ctree = this.V1()) || this.backPos(prevP, prevI, prevNXQ))) {
       return { 'V1': ctree };
     } else {
       return false;
     }
   }
+  // * 常量声明语句
+  entryConst(id, key, val) {  // 对二维符号表进行赋值，以变量名作为列键(id)，常量类型、值作为行键(key)
+    let table = this.CONST_TABLE;
+    if (!(id in table)) {
+      table[id] = {};
+    }
+    table[id][key] = val; // table['A'][type'] = int , table['A']['val'] = 123
+  }
+  // ! 将return的语法树改为了需要return的综合属性，
+  // ! 然后如果不需要传递的话就直接return true或false了，
+  // ! 不需要再把递归调用的过程以语法树的结构记录下来了
+  // ! 把ctree改为f
+  // ! 传递的属性命名为大写
+  // ! 返回的typeid或typeint等type...需要获取类型对应的真实值
   C1() {
     if (this.isMatch('const')) {
-      let ctree1 = this.C2();
-      let ctree2 = this.T();
-      return (ctree1 && ctree2) ? { 'const': 'const', 'C2': ctree1, 'T': ctree2 } : false;
+      let TYPE = this.C2();   // 执行完ConstHead
+      let f = this.T(TYPE);  // 传递
+      // 所有执行完，即ConstDCL执行完
+      return (TYPE && f);  // ! 比如这里是return的bool
     } else {
       return this.error('期待为const开始');
     }
   }
   C2() {
+    // 执行ConstType,这里不需要改，直接返回对应的类型就可以了
     if (this.isMatch('int')) {
-      return 'int';
+      return 'int';   // ! 而这里就是return的属性供上层使用
     } else if (this.isMatch('char')) {
       return 'char';
     } else if (this.isMatch('float')) {
@@ -733,71 +892,88 @@ class MidCodeGenerator {
       return this.error('期待为intcharfloat');
     }
   }
-  T() {
+  T(TYPE) {  // 这里会修改符号表
+    let word = this.getSrcWord();  // 获取下面typeid对应的真实名
     if (this.isMatch('typeid')) {
       let f = this.isMatch('=');
-      let ctree1 = this.C();
-      let ctree2 = this.T_();
-      return (f && ctree1 && ctree2)
-        ? { 'typeid': 'typeid', 'C': ctree1, "T'": ctree2 }
-        : false;
+      let VAL = this.C();  // todo 这里需要返回值
+      // 执行完一次ConstTDef
+      this.entryConst(word, 'type', TYPE);
+      this.entryConst(word, 'val', VAL);
+      let f1 = this.T_(TYPE); // 这里也可能需要type
+      return (f && VAL && f1);
     } else {
       return this.error('期待为标识符');
     }
   }
-  T_() {
+  T_(TYPE) {
     if (this.isMatch(';')) {
       return ';';
     } else if (this.isMatch(',')) {
-      let ctree = this.T();
-      return ctree ? { ',': ',', 'T': ctree } : false;
+      let f = this.T(TYPE);
+      return f;
     } else {
       return this.error('期待为;,');
     }
+  }
+  // * 常量声明语句通过测试...
+
+  // * 变量声明语句
+  entryVar(id, type, val) {  // 这里就一次性赋值完type与val，因为有可能第二次重复声明val没有，所以就要赋val为undifined
+    let table = this.VAR_TABLE;
+    let path = this.getScopePath();
+    if (!(id in table)) {
+      table[id] = {};  // 以路径为key
+    }
+    if (!(path in table[id])) {
+      table[id][path] = {};
+    }
+    table[id][path]['type'] = type;
+    // ! 不传val，在js中就自动为undefined，所以这里也是直接赋值
+    table[id][path]['val'] = val;
   }
   V1() {
-    let ctree1 = null;
-    let ctree2 = null
-    if ((ctree1 = this.V2()) && (ctree2 = this.T1())) {
-      return { 'V2': ctree1, 'T1': ctree2 };
+    let TYPE;
+    if ((TYPE = this.V2()) && this.T1(TYPE)) {
+      return true;
     } else {
       return false;
     }
   }
-  T1() {
-    let ctree1 = null;
-    let ctree2 = null
-    if ((ctree1 = this.V4()) && (ctree2 = this.T1_())) {
-      return { 'V4': ctree1, "T1'": ctree2 };
+  T1(TYPE) {
+    if (this.V4(TYPE) && this.T1_(TYPE)) {
+      return true;
     } else {
       return false;
     }
   }
-  T1_() {
+  T1_(TYPE) {
     if (this.isMatch(';')) {
-      return ';';
+      return true;
     } else if (this.isMatch(',')) {
-      let ctree = this.T1();
-      return ctree ? { ',': ',', 'T1': ctree } : false;
+      let f = this.T1(TYPE);
+      return f;
     } else {
       return this.error('期待为;,');
     }
   }
-  V4() {
-    let ctree1 = null;
-    let ctree2 = null;
-    if ((ctree1 = this.V()) && (ctree2 = this.V4_())) {
-      return { 'V': ctree1, "V4'": ctree2 };
+  V4(TYPE) {
+    let typeid;
+    if ((typeid = this.V()) && this.V4_(typeid, TYPE)) {
+      return true;
     } else {
       return false;
     }
   }
-  V4_() {
-    if (this.isMatch('=')) {
-      let ctree = this.E();
-      return ctree ? { '=': '=', 'E': ctree } : false;
+  V4_(typeid, TYPE) {  // 变量名与变量类型  //  算术表达式需要返回值，声明时怎么调用中间代码产生对应的结果呢？
+    if (this.isMatch('=') && this.E()) {
+      let VAL = this.getCurTempPosStr('E');
+      this.entryVar(typeid, TYPE, VAL);
+      this.genCode('=', VAL, undefined, typeid);
+      return true;
     } else if (this.isCurInFollow("V4'")) {
-      return 'epsilon';
+      this.entryVar(typeid, TYPE);
+      return true;
     } else {
       return this.error('期待为=');
     }
@@ -813,18 +989,29 @@ class MidCodeGenerator {
       return this.error('期待为intcharfloat');
     }
   }
+  // * 变量声明语句测试基本通过，未测试作用域下的情况以及未结合算术表达式(E)进行测试...
+
+  // * 函数声明语句
+  entryFun(id, funtype, argtype) {  // val同样可以为空，代表只声明了类型，未声明值。
+    let table = this.FUN_TABLE;
+    if (!(id in table)) {
+      table[id] = [funtype];  // 第一次才需要记录函数类型
+    }
+    if (argtype !== undefined) table[id].push(argtype);  // 后面直接添加参数类型就可以了,并且不能添加undefined，这样才能随时知道参数个数
+  }
   F1() {
-    let ctree1 = null;
-    let ctree2 = null;
-    if ((ctree1 = this.F2())
+    let TYPE;
+    let word;
+    if ((TYPE = this.F2())
+      && (word = this.getSrcWord())  // ! 这里需要在match之前获取typeid对应的真实值
       && this.isMatch('typeid')
       && this.isMatch('(')
-      && (ctree2 = this.L1())
+      && this.L1(TYPE, word)
       && this.isMatch(')')
       && this.isMatch(';')) {
-      return { 'F2': ctree1, 'typeid': 'typeid', '(': '(', 'L1': ctree2, ')': ')', ';': ';' };
+      return true;
     } else {
-      return this.error('期待为F1');  // TODO 后续再把这个错误做个解释
+      return this.error('期待为F1');
     }
   }
   F2() {
@@ -840,47 +1027,53 @@ class MidCodeGenerator {
       return this.error('期待为intcharfloatvoid');
     }
   }
-  L1() {
-    let ctree = this.A1();
-    if (ctree) {
-      return { 'A1': ctree };
+  L1(TYPE, word) {
+    let f = this.A1(TYPE, word);
+    if (f) {
+      return true;
     } else if (this.isCurInFollow('L1')) {
-      return 'epsilon';
+      this.entryFun(word, TYPE);  // 表示没有函数参数
+      return true;
     } else {
       return false;
     }
   }
-  A1() {
-    let ctree1 = null;
-    let ctree2 = null;
-    if ((ctree1 = this.V2()) && (ctree2 = this.A1_())) {
-      return { 'V2': ctree1, "A1'": ctree2 };
+  A1(TYPE, word) {
+    let TYPE_;
+    if ((TYPE_ = this.V2()) && this.A1_(TYPE, word, TYPE_)) {
+      return true;
     } else {
       return false;
     }
   }
-  A1_() {
+  A1_(TYPE, word, TYPE_) {
+    // 第一次调用添加函数类型和一个参数类型，后续调用都是添加参数类型
+    this.entryFun(word, TYPE, TYPE_);  // 因为A1中都是先执行V2再调用的该函数，即每次在V2结束后就可以加入表中了
     if (this.isMatch(',')) {
-      let ctree = this.A1();
-      return ctree ? { ',': ',', 'A1': ctree } : false;
+      let f = this.A1(TYPE, word);
+      return f;
     } else if (this.isCurInFollow("A1'")) {
-      return 'epsilon';
+      return true;
     } else {
       return this.error('期待为A1_');
     }
   }
+  // * 函数声明测试通过...
+
+
   S2() {
     let prevP = this.pos;
     let prevI = this.INDEX;
     let ctree = null;
+    let prevNXQ = this.NXQ_;
     if (this.isCurInFirst('S2', 'S3')
-      && ((ctree = this.S3()) || this.backPos(prevP, prevI))) {
+      && ((ctree = this.S3()) || this.backPos(prevP, prevI, prevNXQ))) {
       return { 'S3': ctree };
     } else if (this.isCurInFirst('S2', 'S4')
-      && ((ctree = this.S4()) || this.backPos(prevP, prevI))) {
+      && ((ctree = this.S4()) || this.backPos(prevP, prevI, prevNXQ))) {
       return { 'S4': ctree };
     } else if (this.isCurInFirst('S2', 'S5')
-      && ((ctree = this.S5()) || this.backPos(prevP, prevI))) {
+      && ((ctree = this.S5()) || this.backPos(prevP, prevI, prevNXQ))) {
       return { 'S5': ctree };
     } else {
       return false;
@@ -890,11 +1083,12 @@ class MidCodeGenerator {
     let prevP = this.pos;
     let prevI = this.INDEX;
     let ctree = null;
+    let prevNXQ = this.NXQ_;
     if (this.isCurInFirst('S3', 'S6')
-      && ((ctree = this.S6()) || this.backPos(prevP, prevI))) {
+      && ((ctree = this.S6()) || this.backPos(prevP, prevI, prevNXQ))) {
       return { 'S6': ctree };
     } else if (this.isCurInFirst('S3', 'S7')
-      && ((ctree = this.S7()) || this.backPos(prevP, prevI))) {
+      && ((ctree = this.S7()) || this.backPos(prevP, prevI, prevNXQ))) {
       return { 'S7': ctree };
     } else {
       return false;
@@ -920,30 +1114,31 @@ class MidCodeGenerator {
     let prevP = this.pos;
     let prevI = this.INDEX;
     let ctree = null;
+    let prevNXQ = this.NXQ_;
     if (this.isCurInFirst('S4', 'X1')
-      && ((ctree = this.X1()) || this.backPos(prevP, prevI))) {
+      && ((ctree = this.X1()) || this.backPos(prevP, prevI, prevNXQ))) {
       return { 'X1': ctree };
     } else if (this.isCurInFirst('S4', 'X2')
-      && ((ctree = this.X2()) || this.backPos(prevP, prevI))) {
+      && ((ctree = this.X2()) || this.backPos(prevP, prevI, prevNXQ))) {
       return { 'X2': ctree };
     } else if (this.isCurInFirst('S4', 'X3')
-      && ((ctree = this.X3()) || this.backPos(prevP, prevI))) {
+      && ((ctree = this.X3()) || this.backPos(prevP, prevI, prevNXQ))) {
       return { 'X3': ctree };
     } else if (this.isCurInFirst('S4', 'X4')
-      && ((ctree = this.X4()) || this.backPos(prevP, prevI))) {
+      && ((ctree = this.X4()) || this.backPos(prevP, prevI, prevNXQ))) {
       return { 'X4': ctree };
     } else if (this.isCurInFirst('S4', 'X5')
-      && ((ctree = this.X5()) || this.backPos(prevP, prevI))) {
+      && ((ctree = this.X5()) || this.backPos(prevP, prevI, prevNXQ))) {
       return { 'X5': ctree };
     } else {
       return false;
     }
   }
-  S5() {
+  S5() {  // ! 作用域，我定义在了外层的函数上
     if (this.isMatch('{')) {
-      let ctree = this.T3();
-      let f = this.isMatch('}');
-      return (ctree && f) ? { '{': '{', 'T3': ctree, '}': '}' } : false;
+      let f1 = this.T3();
+      let f2 = this.isMatch('}');
+      return f1 && f2;
     } else {
       return this.error('期待为S5')
     }
@@ -967,146 +1162,139 @@ class MidCodeGenerator {
       return false;
     }
   }
+  // * if语句
   X1() {
-    let ctree1 = null;
-    let ctree2 = null;
-    let ctree3 = null;
     if (this.isMatch('if')
       && this.isMatch('(')
-      && (ctree1 = this.E())
+      && this.E3()  // ? 要不这里直接改为E3?
       && this.isMatch(')')
-      && (ctree2 = this.S())
-      && (ctree3 = this.X1_())) {
-      return { 'if': 'if', '(': '(', 'E': ctree1, ')': ')', 'S': ctree2, "X1'": ctree3 };
+      && this.backPatch(this.tempVar.E3tc, this.NXQ_)  // ! 这里应该加入
+      && (this.tempVar.X1chain = this.tempVar.E3fc)  // ! Efc-->E3fc
+      && this.S()
+      && this.X1_()) {
+      return true;
     } else {
       return this.error('期待为X1')
     }
   }
   X1_() {
     if (this.isMatch('else')) {
-      let ctree = this.S();
-      return ctree ? { 'else': 'else', 'S': ctree } : false;
+      let q = this.NXQ_;
+      this.genCode('j', undefined, undefined, 0);
+      this.backPatch(this.tempVar.X1chain, this.NXQ_);
+      this.tempVar.X1chain = this.merge(this.tempVar.X1chain, q); // !
+      let f = this.S();
+      return f;
     } else if (this.isCurInFollow("X1'")) {
-      return 'epsilon';
+      return true;
     } else {
       return this.error('期待为X1_');
     }
   }
+  // * for语句
   X2() {
-    let ctree1 = null;
-    let ctree2 = null;
-    let ctree3 = null;
-    let ctree4 = null;
+    let place;
     if (this.isMatch('for')
       && this.isMatch('(')
-      && (ctree1 = this.E())
+      && this.E()
+      && this.genCode('=', this.getCurTempPosStr('E'), undefined, this.newTemp('X2'))
+      && (this.tempVar.X2test = this.NXQ_)
       && this.isMatch(';')
-      && (ctree2 = this.E())
+      && this.E()
+      && (place = this.newTemp('X2'))
+      && this.genCode('=', this.getCurTempPosStr('E'), undefined, place)
+      && (this.tempVar.X2chain = this.NXQ_)
+      && this.genCode('jz', place, undefined, 0)
+      && (this.tempVar.X2right = this.NXQ_)
+      && this.genCode('j', undefined, undefined, 0)
+      && (this.tempVar.X2inc = this.NXQ_)
       && this.isMatch(';')
-      && (ctree3 = this.E())
+      && this.E()
+      && this.genCode('j', undefined, undefined, this.tempVar.X2test)
+      && this.backPatch(this.tempVar.X2right, this.NXQ_)
       && this.isMatch(')')
-      && (ctree4 = this.P())) {
-      return {
-        'for': 'for',
-        '(': '(',
-        'E': ctree1,
-        ';': ';',
-        'E': ctree2,
-        ';': ';',
-        'E': ctree3,
-        ')': ')',
-        'P': ctree4
-      };
+      && this.P()) {
+      // this.backPatch(this.tempVar.Pchain, this.NXQ_);
+      this.genCode('j', undefined, undefined, this.tempVar.X2inc);
+      // this.tempVar.X2chain = this.merge(this.tempVar.X2chain, this.tempVar.Pbrk);  // todo need Pbrk
+      return true;
     } else {
-      return this.error('期待为X2')  // TODO 检查一遍error前是否有return
+      return this.error('期待为X2');
     }
   }
+
   X3() {
-    let ctree1 = null;
-    let ctree2 = null;
     if (this.isMatch('while')
       && this.isMatch('(')
-      && (ctree1 = this.E())
+      && this.E()
       && this.isMatch(')')
-      && (ctree2 = this.P())) {
-      return {
-        'while': 'while',
-        '(': '(',
-        'E': ctree1,
-        ')': ')',
-        'P': ctree2
-      }
+      && this.P()) {
+      return true;
     } else {
       return this.error('期待为X3');
     }
   }
+  // * do_while语句
   X4() {
-    let ctree1 = null;
-    let ctree2 = null;
     if (this.isMatch('do')
-      && (ctree1 = this.P1())
+      && (this.tempVar.X4head = this.NXQ_)
+      && this.P1()
       && this.isMatch('while')
+      && this.backPatch(this.tempVar.P1chain, this.NXQ_)  // todo need P1chain
       && this.isMatch('(')
-      && (ctree2 = this.E())
+      && this.E()
       && this.isMatch(')')
       && this.isMatch(';')) {
-      return {
-        'do': 'do',
-        'P1': ctree1,
-        'while': 'while',
-        '(': '(',
-        'E': ctree2,
-        ')': ')',
-        ';': ';'
-      };
+      return true;
     } else {
       return this.error('期待为X4');
     }
   }
+
   P() {
     let prevP = this.pos;
     let prevI = this.INDEX;
     let ctree = null;
+    let prevNXQ = this.NXQ_;
     if (this.isCurInFirst('P', 'S1')
-      && ((ctree = this.S1()) || this.backPos(prevP, prevI))) {
+      && ((ctree = this.S1()) || this.backPos(prevP, prevI, prevNXQ))) {
       return { 'S1': ctree };
     } else if (this.isCurInFirst('P', 'P2')
-      && ((ctree = this.P2()) || this.backPos(prevP, prevI))) {
+      && ((ctree = this.P2()) || this.backPos(prevP, prevI, prevNXQ))) {
       return { 'P2': ctree };
     } else if (this.isCurInFirst('P', 'P1')
-      && ((ctree = this.P1()) || this.backPos(prevP, prevI))) {
+      && ((ctree = this.P1()) || this.backPos(prevP, prevI, prevNXQ))) {
       return { 'P1': ctree };
     } else if (this.isCurInFirst('P', 'S5')  // TODO 这里直接加了S5,粒度可能太高了
-      && ((ctree = this.S5()) || this.backPos(prevP, prevI))) {
+      && ((ctree = this.S5()) || this.backPos(prevP, prevI, prevNXQ))) {
       return { 'S5': ctree }
     } else {
       return false;
     }
   }
-  P1() {
+  P1() {  //  这个复合语句只是控制语句的块，并没有进入作用域
     if (this.isMatch('{')) {
-      let ctree = this.T4();
-      let f = this.isMatch('}');
-      return (ctree && f) ? { '{': '{', 'T4': ctree, '}': '}' } : false;
+      let f1 = this.T4();
+      this.backPatch(this.tempVar.E3tc, this.tempVar.X4head); // !
+      this.tempVar.X4head = this.tempVar.E3fc;
+      let f2 = this.isMatch('}');
+      return f1 && f2;
     } else {
       return this.error('期待为P1');
     }
   }
   T4() {
-    let ctree1 = null;
-    let ctree2 = null;
-    if ((ctree1 = this.P()) && (ctree2 = this.T4_())) {
-      return { 'P': ctree1, "T4'": ctree2 };
+    if (this.P() && this.T4_()) {
+      return true;
     } else {
       return false;
     }
   }
   T4_() {
-    let ctree = null;
     if (this.isCurInFollow("T4'")) {
-      return 'epsilon';
-    } else if (ctree = this.T4()) {
-      return { 'T4': ctree };
+      return true;
+    } else if (this.T4()) {
+      return true;
     } else {
       return false;
     }
@@ -1115,26 +1303,27 @@ class MidCodeGenerator {
     let prevP = this.pos;
     let prevI = this.INDEX;
     let ctree = null;
+    let prevNXQ = this.NXQ_;
     if (this.isCurInFirst('P2', 'P3')
-      && ((ctree = this.P3()) || this.backPos(prevP, prevI))) {
+      && ((ctree = this.P3()) || this.backPos(prevP, prevI, prevNXQ))) {
       return { 'P3': ctree };
     } else if (this.isCurInFirst('P2', 'X2')
-      && ((ctree = this.X2()) || this.backPos(prevP, prevI))) {
+      && ((ctree = this.X2()) || this.backPos(prevP, prevI, prevNXQ))) {
       return { 'X2': ctree };
     } else if (this.isCurInFirst('P2', 'X3')
-      && ((ctree = this.X3()) || this.backPos(prevP, prevI))) {
+      && ((ctree = this.X3()) || this.backPos(prevP, prevI, prevNXQ))) {
       return { 'X3': ctree };
     } else if (this.isCurInFirst('P2', 'X4')
-      && ((ctree = this.X4()) || this.backPos(prevP, prevI))) {
+      && ((ctree = this.X4()) || this.backPos(prevP, prevI, prevNXQ))) {
       return { 'X4': ctree };
     } else if (this.isCurInFirst('P2', 'X5')
-      && ((ctree = this.X5()) || this.backPos(prevP, prevI))) {
+      && ((ctree = this.X5()) || this.backPos(prevP, prevI, prevNXQ))) {
       return { 'X5': ctree };
     } else if (this.isCurInFirst('P2', 'X6')
-      && ((ctree = this.X6()) || this.backPos(prevP, prevI))) {
+      && ((ctree = this.X6()) || this.backPos(prevP, prevI, prevNXQ))) {
       return { 'X6': ctree };
     } else if (this.isCurInFirst('P2', 'X7')
-      && ((ctree = this.X7()) || this.backPos(prevP, prevI))) {
+      && ((ctree = this.X7()) || this.backPos(prevP, prevI, prevNXQ))) {
       return { 'X7': ctree };
     } else {
       return false;
@@ -1205,76 +1394,95 @@ class MidCodeGenerator {
       return this.error('期待为X7');
     }
   }
-  F3() {
-    let ctree1 = null;
-    let ctree2 = null;
-    let ctree3 = null;
-    if ((ctree1 = this.F2())
+  // * 函数定义
+  F3() { // ! 作用域在函数内才有
+    let word;
+    if ((this.tempVar.F3type = this.F2())
+      && (word = this.getSrcWord())
       && this.isMatch('typeid')
+      && this.genCode(word, undefined, undefined, undefined)
       && this.isMatch('(')
-      && (ctree2 = this.L2())
+      && this.inScope()  // ! 进入作用域
+      && (this.L2())
       && this.isMatch(')')
-      && (ctree3 = this.S5())) {
-      return {
-        'F2': ctree1,
-        'typeid': 'typeid',
-        '(': '(',
-        'L2': ctree2,
-        ')': ')',
-        'S5': ctree3
-      }
+      && (this.S5())) {
+      this.outScope();  // ! 退出作用域
+      this.genCode('ret', undefined, undefined, undefined)
+      return true;
     } else {
       return this.error('期待为F3')
     }
   }
   L2() {
-    let ctree = null;
-    if (ctree = this.A2()) {
-      return { 'A2': ctree };
+    if (this.A2()) {
+      return true;
     } else if (this.isCurInFollow('L2')) {
-      return 'epsilon';
+      return true;
     } else {
       return false;
     }
   }
   A2() {
-    let ctree1 = null;
-    let ctree2 = null;
-    if ((ctree1 = this.V2())
+    let word;
+    let type;
+    if ((type = this.V2())
+      && (word = this.getSrcWord())
       && this.isMatch('typeid')
-      && (ctree2 = this.A2_())) {
-      return {
-        'V2': ctree1,
-        'typeid': 'typeid',
-        "A2'": ctree2
-      }
+      && (this.entryVar(word, type))  // !
+      && this.A2_()) {
+      return true;
     } else {
       return this.error('期待为A2');
     }
   }
   A2_() {
     if (this.isMatch(',')) {
-      let ctree = this.A2();
-      return ctree ? { ',': ',', 'A2': ctree } : false;
+      let f = this.A2();
+      return f;
     } else if (this.isCurInFollow("A2'")) {
-      return 'epsilon';
+      return true;
     } else {
       return this.error('期待为A2_');
     }
   }
+
   F4() {
-    let ctree1 = null;
-    let ctree2 = null;
-    if ((ctree1 = this.F3()) && (ctree2 = this.F4())) {
-      return {
-        'F3': ctree1,
-        'F4': ctree2
-      }
+    if (this.F3() && this.F4()) {
+      return true;
     } else if (this.isCurInFollow('F4')) {
-      return 'epsilon';
+      return true;
     } else {
       return false;
     }
+  }
+  trans$place() {  // 将映射的转换为最真实、里面的，并且重新为临时变量命名
+    let flag = true;
+    let tempCount = 0;
+    let tempMap = {};
+    while(flag){
+      flag = false;
+      Object.keys(this.midCode).forEach((k)=>{
+        let line = this.midCode[k];
+        line.forEach((v, i)=>{
+          if(/\$/.test(v)){
+            let [X, n] = v.split('$');
+            if(this.tempVar[X][n] !== undefined){
+              this.midCode[k][i] = this.tempVar[X][n];
+              flag = true;  // 变化了就赋值为true，直到不再变化才跳出循环
+            }else{
+              if(v in tempMap){
+                this.midCode[k][i] = tempMap[v]
+              }else{
+                let sym = '__T' + tempCount++;
+                this.midCode[k][i] = sym;
+                tempMap[v] = sym;  // 记录，下次遇到同名的好使用
+              }
+            }
+          }
+        })  
+      })
+    }
+    return this.midCode;
   }
 }
 
@@ -1287,12 +1495,17 @@ function flatObj(arr2) {
 }
 /* 使用示范 */
 async function example3() {
-  const wr = new WordRecognition('./src/js/compilerCore/testCase/SyntacticParser/test12.txt');
-  let [wInfo, error, tokensArr] = await wr.start();
-  const MCG = new MidCodeGenerator(tokensArr);
+  const wr = new WordRecognition('./src/js/compilerCore/testCase/SyntacticParser/test.txt');
+  let [wInfo, error, tokensArr, srcWord] = await wr.start();
+  const MCG = new MidCodeGenerator(tokensArr, srcWord);
   await MCG.init('./src/js/compilerCore/SyntacticParser/Grammar/G.txt')
-  let res = MCG.parser();
-  console.log(res);
-  printTree(res);
+  MCG.parser();
+  console.log('--------------------中间代码---------------------');
+  console.log(MCG.CONST_TABLE);
+  console.log(MCG.VAR_TABLE);
+  console.log(MCG.FUN_TABLE);
+  console.log(MCG.midCode);
+  console.log(MCG.trans$place());
+  console.log('over...');
 }
 example3();

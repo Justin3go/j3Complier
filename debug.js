@@ -1,13 +1,1 @@
-class test{
-  constructor(){
-
-  }
-  I(){
-    console.log(123);
-  }
-  G(){
-    this.I();
-  }
-}
-let t =new test();
-t.G()
+console.log(/$/.test('2113$712364'));
