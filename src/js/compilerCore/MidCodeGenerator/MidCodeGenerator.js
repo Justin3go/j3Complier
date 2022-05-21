@@ -1175,6 +1175,7 @@ class MidCodeGenerator {
       && (this.tempVar.X1chain = this.tempVar.E3fc)  // ! Efc-->E3fc
       && this.S()
       && this.X1_()) {
+        // todo 这里进行回填？
       return true;
     } else {
       return this.error('期待为X1')
