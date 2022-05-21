@@ -53,7 +53,6 @@ class Tool {
     ps.forEach((val, index, arr) => {
       let [front, last] = val.split('->').map(val => val.replace(/ /g, ''));
       // let last_ = last.split(/[^\|]\|[^\|]/);  // 单个|而非两个||  // ! 这个分词有问题，把前后的字符给占了；
-      if (last === undefined) debugger
       let last_ = this.splitOr(last);
       let res = [];
       last_.forEach((val) => {
@@ -327,7 +326,6 @@ class MidCodeGenerator {
   isCurInFirst(Xkey, X) {
     let token = this.getCurToken();
     let sym = this.reCodeMap[token];
-    if (this.tool.firstSet.get(Xkey).get(X) === undefined) debugger
     return this.tool.firstSet.get(Xkey).get(X).has(sym);
   }
   isCurInFollow(X) {
@@ -513,6 +511,7 @@ class MidCodeGenerator {
     let prevI = this.INDEX;
     let prevNXQ = this.NXQ_;
     // this.newTemp('E'); // ! 新增一个临时变量存储
+    // if(this.INDEX == 15)debugger;
     if (this.isCurInFirst('E', 'E4')
       && (this.E4() || this.backPos(prevP, prevI, prevNXQ))) {
       // this.assignTemp('E', 'E4');  // 赋值表达式没有
@@ -528,14 +527,17 @@ class MidCodeGenerator {
       return true;
     } else if (this.isCurInFirst('E', 'E1')
       && (this.E1() || this.backPos(prevP, prevI, prevNXQ))) {
-      this.newTemp('E');
-      this.assignTemp('E', 'E1');  // 有
+      let nt = this.newTemp('E');
+      // if(nt=='E$8')debugger
+      let place = this.getCurTempPosStr('E1')
+      this.assignOther('E', place);  // 有 // ! 注意这里不是assignTemp，把undefined-->undeined，而是把地址赋给它，从而认为这两个变量是一个变量
       return true;
     } else {
       return false;
     }
   }
   E1() {  // * over
+    // this.newTemp('E1');  // 这里申请值
     if (this.I() && this.E1_()) {
       return true;
     } else {
@@ -543,54 +545,56 @@ class MidCodeGenerator {
     }
   }
   E1_() {  // * over
-    this.newTemp('E1');  // 这里申请值
+    let nt3 = this.getCurTempPosStr('I'); // ! 这里要放在if外面，这样才是上面的I刚好执行完的值
     if (this.isMatch('+') && this.E1()) {  // 必须在使用了E1之后获取和申请
       let nt1 = this.getCurTempPosStr('E1');
       let nt2 = this.newTemp('E1');
-      let nt3 = this.getCurTempPosStr('I');
-      this.genCode('+', nt1, nt3, nt2);  // 结果也存在E1里面，算了，万一后面不行呢
+      this.genCode('+', nt3, nt1, nt2);  // 结果也存在E1里面，算了，万一后面不行呢
       return true;
     } else if (this.isMatch('-') && this.E1()) {
       let nt1 = this.getCurTempPosStr('E1');
       let nt2 = this.newTemp('E1');
-      let nt3 = this.getCurTempPosStr('I');
-      this.genCode('-', nt1, nt3, nt2);
+      this.genCode('-', nt3, nt1, nt2);
       return true;
-    } else if (this.isCurInFollow("E1'")) {
-      this.assignTemp('E1', 'I');
+    } else if (this.isCurInFollow("E1'")) {  // 只匹配了I，就把I的值赋值给E3
+      this.newTemp('E1');
+      let  place = this.getCurTempPosStr('I')
+      this.assignOther('E1', place);  // ! 同样这里也要注意不是assignTemp
       return true;
     } else {
       return this.error('期待为+或-');
     }
   }
   I() {  // * over
-    this.newTemp('I');
+    
     if (this.I1() && this.I_()) {
+      // this.assignTemp('I', 'I1');
       return true;
     } else {
       return false;
     }
   }
   I_() {  // * over
+    let nt3 = this.getCurTempPosStr('I1');  // !放在外面，否者下面经过this.I()就会是下一个值，而不是之前的值
     if (this.isMatch('*') && this.I()) {
       let nt1 = this.getCurTempPosStr('I');
       let nt2 = this.newTemp('I');
-      let nt3 = this.getCurTempPosStr('I1');
-      this.genCode('*', nt1, nt3, nt2);  // 结果也存在I中
+      this.genCode('*', nt3, nt1, nt2);  // 结果也存在I中
       return true;
     } else if (this.isMatch('/') && this.I()) {
       let nt1 = this.getCurTempPosStr('I');
       let nt2 = this.newTemp('I');
-      let nt3 = this.getCurTempPosStr('I1');
-      this.genCode('/', nt1, nt3, nt2);
+      // let nt3 = this.getCurTempPosStr('I1');
+      this.genCode('/', nt3, nt1, nt2);
       return true;
     } else if (this.isMatch('%') && this.I()) {
       let nt1 = this.getCurTempPosStr('I');
       let nt2 = this.newTemp('I');
-      let nt3 = this.getCurTempPosStr('I1');
-      this.genCode('%', nt1, nt3, nt2);
+      // let nt3 = this.getCurTempPosStr('I1');
+      this.genCode('%', nt3, nt1, nt2);
       return true;
     } else if (this.isCurInFollow("I'")) {
+      this.newTemp('I');
       this.assignTemp('I', 'I1');
       return true;
     } else {
@@ -617,7 +621,7 @@ class MidCodeGenerator {
       return true;
     } else if (this.isCurInFirst('I1', 'V')
       && ((word = this.V()) || this.backPos(prevP, prevI, prevNXQ))) {
-      let entry = this.getVarEntry(word);
+      let entry = this.getVarEntry(word);  // todo 中间代码__T5而应该是m，猜测这里可能返回的是undefined，后续验证
       this.assignOther('I1', entry);
       return true;
     } else {
@@ -793,7 +797,6 @@ class MidCodeGenerator {
     }
   }
   E4() {  // * over
-    if(this.INDEX == 9)debugger
     let word = this.getSrcWord();
     if (this.isMatch('typeid')
       && this.isMatch('=')
