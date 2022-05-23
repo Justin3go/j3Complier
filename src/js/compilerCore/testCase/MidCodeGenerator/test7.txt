@@ -1,4 +1,3 @@
-//Ò»¸öº¯Êı²âÊÔ
 int a = 1 ;
 
 int sum(int,int);

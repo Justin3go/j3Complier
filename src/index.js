@@ -81,8 +81,12 @@ var template = [
     label: '词法分析',
     // submenu 代表下一级菜单
     submenu: [
-      { label: '子菜单一' },
-      { label: '子菜单二' },
+      { label: '运行' },
+      { label: 'reg_nfa_dfa',
+      click: () => {
+        // 通知渲染进程处理
+        mainWindow.webContents.send('process-reg', 'hi')
+      } },
       { label: '子菜单三' },
       { label: '子菜单四' },
     ],
@@ -91,7 +95,7 @@ var template = [
     label: '语法分析',
     // submenu 代表下一级菜单
     submenu: [
-      { label: '子菜单一' },
+      { label: '递归下降' },
       { label: '子菜单二' },
       { label: '子菜单三' },
       { label: '子菜单四' },
@@ -101,7 +105,7 @@ var template = [
     label: '中间代码',
     // submenu 代表下一级菜单
     submenu: [
-      { label: '子菜单一' },
+      { label: '运行' },
       { label: '子菜单二' },
       { label: '子菜单三' },
       { label: '子菜单四' },

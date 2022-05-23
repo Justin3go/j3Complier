@@ -361,12 +361,14 @@ class MidCodeGenerator {
       }
     }
     if (this.isMatch('(') && this.isMatch(')')) {
-      this.genCode('main', undefined, undefined, undefined);
+      this.genCode('main', undefined, undefined, undefined, this.getScopePath());
     } else {
       this.error('main()无法识别');
     }
+    this.inScope();
     if (this.S5()) {
-      this.genCode('sys', undefined, undefined, undefined);
+      this.outScope();
+      this.genCode('sys', undefined, undefined, undefined, this.getScopePath());
     } else {
       this.getNext();
     }
@@ -381,8 +383,8 @@ class MidCodeGenerator {
   NXQ() {  // 自动加一
     return this.NXQ_++;
   }
-  genCode(op, arg1, arg2, result) {
-    this.midCode[this.NXQ()] = [op, arg1, arg2, result];
+  genCode(op, arg1, arg2, result, other) {
+    this.midCode[this.NXQ()] = [op, arg1, arg2, result, other];
     return true;
   }
   newTemp(X) {  // X为文法符号
@@ -415,7 +417,7 @@ class MidCodeGenerator {
   }
   backPatch(P, t) {  // 将链首所连接的每个四元式的第四个分量都改写为t
     let Q = P;
-    while (Q != 0) {
+    if (Q != 0 && Q < this.NXQ_) {  //! while-->if
       let m = this.midCode[Q][3];
       this.midCode[Q][3] = t;
       Q = m;
@@ -549,16 +551,16 @@ class MidCodeGenerator {
     if (this.isMatch('+') && this.E1()) {  // 必须在使用了E1之后获取和申请
       let nt1 = this.getCurTempPosStr('E1');
       let nt2 = this.newTemp('E1');
-      this.genCode('+', nt3, nt1, nt2);  // 结果也存在E1里面，算了，万一后面不行呢
+      this.genCode('+', nt3, nt1, nt2, this.getScopePath());  // 结果也存在E1里面，算了，万一后面不行呢
       return true;
     } else if (this.isMatch('-') && this.E1()) {
       let nt1 = this.getCurTempPosStr('E1');
       let nt2 = this.newTemp('E1');
-      this.genCode('-', nt3, nt1, nt2);
+      this.genCode('-', nt3, nt1, nt2, this.getScopePath());
       return true;
     } else if (this.isCurInFollow("E1'")) {  // 只匹配了I，就把I的值赋值给E3
       this.newTemp('E1');
-      let  place = this.getCurTempPosStr('I')
+      let place = this.getCurTempPosStr('I')
       this.assignOther('E1', place);  // ! 同样这里也要注意不是assignTemp
       return true;
     } else {
@@ -566,7 +568,7 @@ class MidCodeGenerator {
     }
   }
   I() {  // * over
-    
+
     if (this.I1() && this.I_()) {
       // this.assignTemp('I', 'I1');
       return true;
@@ -579,19 +581,19 @@ class MidCodeGenerator {
     if (this.isMatch('*') && this.I()) {
       let nt1 = this.getCurTempPosStr('I');
       let nt2 = this.newTemp('I');
-      this.genCode('*', nt3, nt1, nt2);  // 结果也存在I中
+      this.genCode('*', nt3, nt1, nt2, this.getScopePath());  // 结果也存在I中
       return true;
     } else if (this.isMatch('/') && this.I()) {
       let nt1 = this.getCurTempPosStr('I');
       let nt2 = this.newTemp('I');
       // let nt3 = this.getCurTempPosStr('I1');
-      this.genCode('/', nt3, nt1, nt2);
+      this.genCode('/', nt3, nt1, nt2, this.getScopePath());
       return true;
     } else if (this.isMatch('%') && this.I()) {
       let nt1 = this.getCurTempPosStr('I');
       let nt2 = this.newTemp('I');
       // let nt3 = this.getCurTempPosStr('I1');
-      this.genCode('%', nt3, nt1, nt2);
+      this.genCode('%', nt3, nt1, nt2, this.getScopePath());
       return true;
     } else if (this.isCurInFollow("I'")) {
       this.newTemp('I');
@@ -657,7 +659,7 @@ class MidCodeGenerator {
       let f1 = this.isMatch('(');
       let f2 = this.L();
       let f3 = this.isMatch(')');
-      this.genCode('call', word, undefined, nt);
+      this.genCode('call', word, undefined, nt, this.getScopePath());
       return (f1 && f2 && f3) ? nt : false;
     } else {
       return this.error('期待为标识符');
@@ -675,7 +677,7 @@ class MidCodeGenerator {
   }
   A() {
     if (this.E()
-      && this.genCode('para', this.getCurTempPosStr('E'), undefined, undefined)
+      && this.genCode('para', this.getCurTempPosStr('E'), undefined, undefined, this.getScopePath())
       && this.A_()) {
       return true;
     } else {
@@ -704,12 +706,12 @@ class MidCodeGenerator {
     let place2 = this.getCurTempPosStr('E1');
 
     if (f1 && rop && f2) {
-      this.tempVar.I3tc = this.NXQ_;  // ! 除place外的其他语义变量是这样命名的
+      this.tempVar.I3tc = this.NXQ_;
       this.tempVar.I3fc = this.NXQ_ + 1;
       this.tempVar.E2tc = this.NXQ_;
       this.tempVar.E2fc = this.NXQ_ + 1;
-      this.genCode('j' + rop, place1, place2, 0);
-      this.genCode('j', undefined, undefined, 0);
+      this.genCode('j' + rop, place1, place2, 0, this.getScopePath());
+      this.genCode('j', undefined, undefined, 0, this.getScopePath());
       return true;
     } else {
       return false;
@@ -785,8 +787,8 @@ class MidCodeGenerator {
       this.tempVar.I3tc = this.NXQ_;
       this.tempVar.I3fc = this.NXQ_ + 1;
       let place = this.getCurTempPosStr('E1');  // 获取入口
-      this.genCode('jnz', place, undefined, 0);
-      this.genCode('j', undefined, undefined, 0);
+      this.genCode('jnz', place, undefined, 0, this.getScopePath());
+      this.genCode('j', undefined, undefined, 0, this.getScopePath());
       return true;
     } else if (this.isMatch('!') && this.E3()) {
       this.tempVar.I3tc = this.tempVar.E3fc;   // todo 说明这里需要E3里赋值真假出口的语义变量
@@ -803,7 +805,7 @@ class MidCodeGenerator {
       && this.E()) {
       let place = this.getCurTempPosStr('E');
       let entry = this.getVarEntry(word);
-      this.genCode('=', place, undefined, entry);
+      this.genCode('=', place, undefined, entry, this.getScopePath());
       return true;
     }
     else {
@@ -972,7 +974,7 @@ class MidCodeGenerator {
     if (this.isMatch('=') && this.E()) {
       let VAL = this.getCurTempPosStr('E');
       this.entryVar(typeid, TYPE, VAL);
-      this.genCode('=', VAL, undefined, typeid);
+      this.genCode('=', VAL, undefined, typeid, this.getScopePath());
       return true;
     } else if (this.isCurInFollow("V4'")) {
       this.entryVar(typeid, TYPE);
@@ -1175,7 +1177,8 @@ class MidCodeGenerator {
       && (this.tempVar.X1chain = this.tempVar.E3fc)  // ! Efc-->E3fc
       && this.S()
       && this.X1_()) {
-        // todo 这里进行回填？
+      // todo 这里进行回填假出口？
+      // this.backPatch(this.tempVar.E3fc, this.NXQ_)
       return true;
     } else {
       return this.error('期待为X1')
@@ -1184,10 +1187,11 @@ class MidCodeGenerator {
   X1_() {
     if (this.isMatch('else')) {
       let q = this.NXQ_;
-      this.genCode('j', undefined, undefined, 0);
+      this.genCode('j', undefined, undefined, 0, this.getScopePath());
       this.backPatch(this.tempVar.X1chain, this.NXQ_);
       this.tempVar.X1chain = this.merge(this.tempVar.X1chain, q); // !
       let f = this.S();
+      this.backPatch(q, this.NXQ_);
       return f;
     } else if (this.isCurInFollow("X1'")) {
       return true;
@@ -1201,38 +1205,44 @@ class MidCodeGenerator {
     if (this.isMatch('for')
       && this.isMatch('(')
       && this.E()
-      && this.genCode('=', this.getCurTempPosStr('E'), undefined, this.newTemp('X2'))
+      && this.genCode('=', this.getCurTempPosStr('E'), undefined, this.newTemp('X2'), this.getScopePath())
       && (this.tempVar.X2test = this.NXQ_)
       && this.isMatch(';')
-      && this.E()
+      && this.E3()
       && (place = this.newTemp('X2'))
-      && this.genCode('=', this.getCurTempPosStr('E'), undefined, place)
+      && this.genCode('=', this.getCurTempPosStr('E'), undefined, place, this.getScopePath())
       && (this.tempVar.X2chain = this.NXQ_)
-      && this.genCode('jz', place, undefined, 0)
+      && this.genCode('jz', place, undefined, 0, this.getScopePath())
       && (this.tempVar.X2right = this.NXQ_)
-      && this.genCode('j', undefined, undefined, 0)
+      && this.genCode('j', undefined, undefined, 0, this.getScopePath())
       && (this.tempVar.X2inc = this.NXQ_)
       && this.isMatch(';')
       && this.E()
-      && this.genCode('j', undefined, undefined, this.tempVar.X2test)
+      && this.genCode('j', undefined, undefined, this.tempVar.X2test, this.getScopePath())
       && this.backPatch(this.tempVar.X2right, this.NXQ_)
       && this.isMatch(')')
       && this.P()) {
       // this.backPatch(this.tempVar.Pchain, this.NXQ_);
-      this.genCode('j', undefined, undefined, this.tempVar.X2inc);
+      this.genCode('j', undefined, undefined, this.tempVar.X2inc, this.getScopePath());
       // this.tempVar.X2chain = this.merge(this.tempVar.X2chain, this.tempVar.Pbrk);  // todo need Pbrk
       return true;
     } else {
       return this.error('期待为X2');
     }
   }
-
+  // * while语句
   X3() {
     if (this.isMatch('while')
+      && (this.tempVar.X3head = this.NXQ_)
       && this.isMatch('(')
-      && this.E()
+      && this.E3()
       && this.isMatch(')')
+      && (this.tempVar.X3nxq = this.NXQ_)  // ! 
+      && (this.tempVar.X3chain = this.tempVar.E3fc)
       && this.P()) {
+      this.genCode('j', undefined, undefined, this.tempVar.X3head, this.getScopePath())
+      this.backPatch(this.tempVar.E3tc, this.tempVar.X3nxq)  // ! P里面会修改，所以再P修改后这里再修改
+      this.backPatch(this.tempVar.X3chain, this.NXQ_)
       return true;
     } else {
       return this.error('期待为X3');
@@ -1246,9 +1256,10 @@ class MidCodeGenerator {
       && this.isMatch('while')
       && this.backPatch(this.tempVar.P1chain, this.NXQ_)  // todo need P1chain
       && this.isMatch('(')
-      && this.E()
+      && this.E3()
       && this.isMatch(')')
       && this.isMatch(';')) {
+
       return true;
     } else {
       return this.error('期待为X4');
@@ -1404,14 +1415,14 @@ class MidCodeGenerator {
     if ((this.tempVar.F3type = this.F2())
       && (word = this.getSrcWord())
       && this.isMatch('typeid')
-      && this.genCode(word, undefined, undefined, undefined)
+      && this.genCode(word, undefined, undefined, undefined, this.getScopePath())
       && this.isMatch('(')
       && this.inScope()  // ! 进入作用域
       && (this.L2())
       && this.isMatch(')')
       && (this.S5())) {
       this.outScope();  // ! 退出作用域
-      this.genCode('ret', undefined, undefined, undefined)
+      this.genCode('ret', undefined, undefined, undefined, this.getScopePath())
       return true;
     } else {
       return this.error('期待为F3')
@@ -1463,27 +1474,27 @@ class MidCodeGenerator {
     let flag = true;
     let tempCount = 0;
     let tempMap = {};
-    while(flag){
+    while (flag) {
       flag = false;
-      Object.keys(this.midCode).forEach((k)=>{
+      Object.keys(this.midCode).forEach((k) => {
         let line = this.midCode[k];
-        line.forEach((v, i)=>{
-          if(/\$/.test(v)){
+        line.forEach((v, i) => {
+          if (/\$/.test(v)) {
             let [X, n] = v.split('$');
-            if(this.tempVar[X][n] !== undefined){
+            if (this.tempVar[X][n] !== undefined) {
               this.midCode[k][i] = this.tempVar[X][n];
               flag = true;  // 变化了就赋值为true，直到不再变化才跳出循环
-            }else{
-              if(v in tempMap){
+            } else {
+              if (v in tempMap) {
                 this.midCode[k][i] = tempMap[v]
-              }else{
+              } else {
                 let sym = '__T' + tempCount++;
                 this.midCode[k][i] = sym;
                 tempMap[v] = sym;  // 记录，下次遇到同名的好使用
               }
             }
           }
-        })  
+        })
       })
     }
     return this.midCode;
@@ -1508,8 +1519,25 @@ async function example3() {
   console.log(MCG.CONST_TABLE);
   console.log(MCG.VAR_TABLE);
   console.log(MCG.FUN_TABLE);
+  let table = {
+    'CONST_TABLE':MCG.CONST_TABLE,
+    'VAR_TABLE':MCG.VAR_TABLE,
+    'FUN_TABLE':MCG.FUN_TABLE
+  }
   console.log(MCG.midCode);
   console.log(MCG.trans$place());
   console.log('over...');
+  fs.writeFile('./src/js/compilerCore/symbol.json', JSON.stringify(table), err => {
+    if (err) {
+      console.error(err)
+      return
+    }
+  })
+  fs.writeFile('./src/js/compilerCore/midcode.json', JSON.stringify(MCG.trans$place()), err => {
+    if (err) {
+      console.error(err)
+      return
+    }
+  })
 }
 example3();

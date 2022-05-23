@@ -1,1 +1,1 @@
-console.log(/$/.test('2113$712364'));
+console.log(!Number.isNaN(Number('a123')));
