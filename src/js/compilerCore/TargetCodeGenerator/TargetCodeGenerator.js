@@ -197,29 +197,6 @@ class TargetCodeGenerator {
     // if()
 
   }
-  main(){}
-  end(){}
-  add(){}
-  substracion(){}
-  multiplication(){}
-  division(){}
-  remainder(){}
-  assign(){}
-  less(){}
-  lessOrEqual(){}
-  greater(){}
-  greaterOrEqual(){}
-  equal(){}
-  notEqual(){}
-  noty(){}
-  jump(){}
-  notzeroJump(){}
-  ZeroJump(){}
-  parameter(){}
-  callFun(){}
-  ret(){}
-  funDefine(){}
-  readWrite(){}
 }
 
 async function example1(){

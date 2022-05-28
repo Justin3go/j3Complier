@@ -549,12 +549,8 @@ if __name__ == '__main__':
         token.get_token(line)
         token.lineno += 1
     token = token.tokenObj
-    # for t in token:
-    # print(t)
     aa = intermediateCodeGeneration.work(token)
     aa.start()
-
-    # print('|||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||||')
 
     bb = work(aa.intermediateCodeList, aa.constList,
               aa.variableList, aa.functionList)

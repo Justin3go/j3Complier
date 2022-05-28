@@ -236,13 +236,13 @@ async function example1() {
     // 或follow集，first集等
   })
 }
-// example1()
+example1()
 class PredictAnalysisor {
-  constructor(input) {
+  constructor() {
     this.tool = null;
     this.preTable = {};
     this.i = 0;
-    this.input = input;
+    // this.input = input;
   }
   async init(filePath) {
     const tool = new Tool(filePath)
@@ -260,25 +260,38 @@ class PredictAnalysisor {
     for (let [X, S] of this.tool.firstSet) {
       for (let [x, s] of S) {
         for (let v of s) {
-          this.add(X, v, `${X}->${x}`)
+          this.add(X, v, [X, x])
           if (v == 'epsilon') {
             for (let i of this.tool.followSet.get(X)) {
-              this.add(X, i, `${X}->${x}`)
+              this.add(X, i, [X, x])
             }
           }
         }
       }
     }
   }
-  analyse() {
+  analyse(input) {
     let stack = ['#', 'E'];
     while (stack[stack.length - 1] != '#') {
-      let sym = this.input[this.i];
-      let Grammar = this.preTable[stack[stack.length - 1]][sym];
-      let g = Grammar.split('->')[1];
-      
-
+      let sym = input[this.i];
+      let X = stack[stack.length - 1];
+      stack.pop();
+      if(X == sym){
+        this.i++;
+        continue
+      }
+      // let Grammar;
+      try{
+        var Grammar = this.preTable[X][sym];
+      }catch{
+        return 'error';
+        let g = Grammar[1];
+        g.split('').reverse().forEach((v)=>{
+          stack.push(v);
+        })
+      }break;
     }
+    return true;
   }
 }
 async function example2() {
@@ -286,5 +299,7 @@ async function example2() {
   await PA.init('src/js/compilerCore/SyntacticParser/Grammar/expression.txt');
   PA.setTable();
   console.log(PA.preTable);
+  let res = PA.analyse(['typeint','+','typeint','*', 'typeint', '#']);
+  console.log(res);
 }
-example2();
+// example2();

@@ -25,60 +25,67 @@ start:	mov ax,extended
 	mov ax,data
 	mov ds,ax
 	
-_1:	MOV AX,0
-	MOV ds:[532],AX
-	
-_2:	CALL _read
+_1:	CALL _read
 	MOV es:[0],AX
 	
-_3:	MOV AX,es:[0]
-	MOV ds:[534],AX
-	
-_4:	MOV AX,ds:[534]
-	CMP AX,1
-	JB _6
-	
-_5:	JMP far ptr _8
-	
-_6:	MOV AX,0
-	MOV ds:[536],AX
-	
-_7:	JMP far ptr _9
-	
-_8:	MOV AX,1
-	MOV ds:[536],AX
-	
-_9:	MOV AX,ds:[532]
-	CMP AX,ds:[534]
-	JB _11
-	
-_10:	JMP far ptr _16
-	
-_11:	MOV AX, ds:[532]
-	ADD AX, 1
-	MOV es:[2],AX
-	
-_12:	MOV AX,es:[2]
+_2:	MOV AX,es:[0]
 	MOV ds:[532],AX
 	
-_13:	MOV AX, ds:[536]
-	MOV BX, ds:[532]
-	MUL BX
-	MOV es:[4],AX
-	
-_14:	MOV AX,es:[4]
-	MOV ds:[536],AX
-	
-_15:	JMP far ptr _9
-	
-_16:	MOV AX,ds:[536]
+_3:	MOV AX,ds:[532]
 	PUSH AX
 	
-_17:	CALL _write
-	MOV es:[6],AX
+_4:	CALL _factor
+	MOV es:[2],AX
+	
+_5:	MOV AX,es:[2]
+	PUSH AX
+	
+_6:	CALL _write
+	MOV es:[4],AX
 	
 quit: mov ah,4ch
     INT 21H
+	
+	_factor:	PUSH BP
+	MOV BP,SP
+	
+_9:	MOV AX,ss:[bp+4]
+	CMP AX,1
+	JNA _11
+	
+_10:	JMP far ptr _13
+	
+	sub sp, 2
+_11:	MOV AX,1
+	MOV ss:[bp-2],AX
+	
+_12:	JMP far ptr _18
+	
+_13:	MOV AX, ss:[bp+4]
+	SUB AX, 1
+	MOV es:[8],AX
+	
+_14:	MOV AX,es:[8]
+	PUSH AX
+	
+_15:	CALL _factor
+	MOV es:[10],AX
+	
+_16:	MOV AX, ss:[bp+4]
+	MOV BX, es:[10]
+	MUL BX
+	MOV es:[6],AX
+	
+_17:	MOV AX,es:[6]
+	MOV ss:[bp-2],AX
+	
+_18:	MOV SP,BP
+	POP BP
+	RET
+	
+_19:	MOV SP,BP
+	POP BP
+	RET
 	
 _read:	push bp
 	mov bp,sp
